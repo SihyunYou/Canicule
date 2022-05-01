@@ -336,11 +336,15 @@ def est_ordre_vente_complete(_symbol):
 		return True
 
 	for mon_dict in dict_response:
-		currency = mon_dict.get('currency')
-		balance = float(mon_dict.get('balance'))
-		locked = float(mon_dict.get('locked'))
-		avg_buy_price = float(mon_dict.get('avg_buy_price'))
-		montant = (balance + locked) * avg_buy_price
+		try:
+			currency = mon_dict.get('currency')
+			balance = float(mon_dict.get('balance'))
+			locked = float(mon_dict.get('locked'))
+			avg_buy_price = float(mon_dict.get('avg_buy_price'))
+			montant = (balance + locked) * avg_buy_price
+		except:
+			time.sleep(TEMPS_SLEEP)
+			return False
 
 		if currency == _symbol:
 			if(montant < PRIX_MINIMUM_VENDU):
@@ -436,7 +440,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 	return False
 
 def obtenir_list_symbol():
-	list_symbol = [""]
+	list_symbol = []
 	with open("ban.txt", 'r') as f:
 		list_symbol_interdit = [line.strip() for line in f]
 	headers = {"Accept": "application/json"}
@@ -445,8 +449,7 @@ def obtenir_list_symbol():
 		response = requests.request("GET", "https://api.upbit.com/v1/market/all?isDetails=false", headers=headers)
 		dict_response1 = json.loads(response.text)
 	except:
-		print("오류 : 심볼 리스트를 받아오는데 실패하였습니다.")
-		return
+		raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(1)")
 
 	for dr in dict_response1:
 		market = dr.get('market')
@@ -458,7 +461,7 @@ def obtenir_list_symbol():
 				time.sleep(0.06)
 				dict_response2 = json.loads(response.text)
 			except:
-				return False
+				raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(2)")
 
 			prix = dict_response2[0].get('trade_price')
 			acc_trade_price = 0
@@ -468,7 +471,6 @@ def obtenir_list_symbol():
 			if(7 < prix < 9 or 50 < prix < 90 or 400 < prix < 900 or 3300 < prix):
 				if(acc_trade_price > 5000000000):
 					list_symbol.append(market[4:])
-	del list_symbol[0]
 
 	print(list_symbol)
 	print("매수 기준에 충족하는 위 코인 목록을 모니터링합니다.")
