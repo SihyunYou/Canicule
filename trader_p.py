@@ -319,8 +319,8 @@ def annuler_ordre_vente():
 			time.sleep(TEMPS_SLEEP)
 		
 
-# flag_ordre_vendre는 매도주문이 걸려 있는지 여부에 대한 플래그
 PRIX_MINIMUM_VENDU = 10000 
+# flag_ordre_vendre : 매도주문이 걸려 있는지 여부에 대한 플래그
 flag_ordre_vendre = False
 count_montant_insuffissant = 0
 
