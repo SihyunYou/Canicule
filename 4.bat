@@ -1,1 +1,1 @@
-trader.exe -n 3 -z 2.1 -t 10 -f 3 -x 2600 -m 1.24 -v 0.32
+trader.py -n 3 -z 2.1 -t 12 -f 3 -x 8192 -m 1.3 -v 0.32

@@ -319,8 +319,8 @@ def annuler_ordre_vente():
 			time.sleep(TEMPS_SLEEP)
 		
 
+# flag_ordre_vendre는 매도주문이 걸려 있는지 여부에 대한 플래그
 PRIX_MINIMUM_VENDU = 10000 
-# flag_ordre_vendre : 매도주문이 걸려 있는지 여부에 대한 플래그
 flag_ordre_vendre = False
 count_montant_insuffissant = 0
 
@@ -424,10 +424,10 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
-				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, proportion_vente))
+				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * proportion_vente))
 			else:
 				print("경고 : 최초 매수가의 값이 0입니다.")
-				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, _proportion_profit))
+				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
 
 			flag_ordre_vendre = True
 			return True
