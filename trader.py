@@ -420,7 +420,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
 			if(premier_prix_achete > 0):
-				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.32
+				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.2
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
