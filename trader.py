@@ -14,7 +14,7 @@ import threading
 
 UNIT = 3
 DUREE_MAXIMUM = 20
-C_MULTIPLICATION_LARGEUR_BANDE = 1.16
+C_MULTIPLICATION_LARGEUR_BANDE = 1.2
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 KEY_ACCESS = ""
 KEY_SECRET = ""
@@ -511,9 +511,9 @@ if __name__=="__main__":
 	z = t = f = x = 0
 
 	DEFAULT_Z = 2
-	DEFAULT_T = 10
+	DEFAULT_T = 11
 	DEFAULT_F = 3
-	DEFAULT_X = 2000
+	DEFAULT_X = 8192
 	DEFAULT_V = 0.34
 
 	if(args.n is not None):

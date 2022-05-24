@@ -1,1 +1,1 @@
-trader.py -n 3 -z 2 -t 11 -f 3 -x 4096 -m 1.2 -v 0.34
+trader.py -n 3 -z 2 -t 11 -f 3 -x 8192 -m 1.2 -v 0.34
