@@ -40,11 +40,11 @@ for p in range(len(lines)):
             for key in somme:
                 rangee = []
                 rangee.append(key)
-                rangee.append(locale.format_string("%d", int(somme[key] * profitabilite / 100), grouping=True))
+                rangee.append(locale.format_string("%d", evaluation * somme[key] / sum(somme.values()), grouping=True))
                 rangee.append(locale.format_string("%d", somme[key], grouping=True))
                 rangee.append(locale.format_string("%d", somme_profit[key], grouping=True))
                 list_rangee.append(rangee)
-            
+
             print("누적 원금 : " + locale.format_string("%d", sum(somme.values()), grouping=True) + "원")
             print("누적 평가손익 : " + locale.format_string("%d", sum(somme_profit.values()), grouping=True) + "원")
 
