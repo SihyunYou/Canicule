@@ -9,8 +9,10 @@ import time
 
 somme = {}
 somme_profit = {}
-date_initial = 0
-date_final = 0 
+somme_profit_list = {}
+user_date_initial = {}
+profitabilite_minute = []
+k = 0
 
 f = open('profit_2022_1.txt', 'r', encoding='UTF-8')
 _lines = f.readlines()
@@ -42,8 +44,11 @@ for p in range(len(lines)):
                 t = evaluation * somme[key] / sum(somme.values())
                 if key in somme_profit.keys():
                     somme_profit[key] += t
+                    somme_profit_list[key].append(somme_profit[key])
                 else:
                     somme_profit[key] = t
+                    user_date_initial[key] = date_initial
+                    somme_profit_list[key] = [somme_profit[key]]
 
             for key in somme:
                 rangee = []
@@ -51,12 +56,14 @@ for p in range(len(lines)):
                 rangee.append(locale.format_string("%d", evaluation * somme[key] / sum(somme.values()), grouping=True))
                 rangee.append(locale.format_string("%d", somme[key], grouping=True))
                 rangee.append(locale.format_string("%d", somme_profit[key], grouping=True))
+                rangee.append(locale.format_string("%f", round(somme_profit[key] / somme[key] * 100, 3), grouping=True))
+                rangee.append(user_date_initial[key])
                 list_rangee.append(rangee)
 
             print("누적 원금 : " + locale.format_string("%d", sum(somme.values()), grouping=True) + "원")
             print("누적 평가손익 : " + locale.format_string("%d", sum(somme_profit.values()), grouping=True) + "원")
 
-            df = pd.DataFrame(list_rangee, columns = ['채권자', '당해 평가손익', '원금 합계', '평가손익 합계'])
+            df = pd.DataFrame(list_rangee, columns = ['채권자', '당해 평가손익', '원금 합계', '평가손익 합계', '수익률(%)', '최초자산편입일'])
             print(df.to_markdown()) 
             print('\n')
     else:
@@ -65,13 +72,13 @@ for p in range(len(lines)):
         temp_initial = datetime.strptime(date_initial, '%Y.%m.%d.%H:%M')
         date_final = list_donnee[1]
         temp_final = datetime.strptime(date_final, '%Y.%m.%d.%H:%M')
-        diff_timestamp = int(time.mktime(temp_final.timetuple()) - time.mktime(temp_initial.timetuple()))
+        diff_second = (temp_final - temp_initial).total_seconds()
 
         event = int(list_donnee[2])
         montant_initial = int(list_donnee[3])
         montant_final = int(list_donnee[4])
 
-        print(date_initial + ' ~ ' + date_final + ' (' + str(temp_final - temp_initial) + ', time_diff=' + str(diff_timestamp) + ')' )
+        print(date_initial + ' ~ ' + date_final + ' (' + str(temp_final - temp_initial) + ', time_diff=' + str(diff_second) + ')' )
         i += 1
         if event == 1:
             print("이벤트 " + str(i) + " : 입출금")
@@ -84,6 +91,9 @@ for p in range(len(lines)):
         evaluation = montant_final - montant_initial
         profitabilite = evaluation / montant_initial * 100
 
+        for k in range(int(diff_second / 60)):
+            profitabilite_minute.append(profitabilite)
+
         if event >= 2:
             for key in somme:
                 t = evaluation * somme[key] / sum(somme.values())
@@ -94,9 +104,18 @@ for p in range(len(lines)):
                     somme_profit[key] = t
 
         print("전이벤트대비 평가손익 : " + locale.format_string("%d", evaluation, grouping=True) + '원')
-        print("시간당 평균 평가손익 : " + locale.format_string("%d", evaluation / diff_timestamp * 3600, grouping=True) + '원')
+        print("시간당 평균 평가손익 : " + locale.format_string("%d", evaluation / diff_second * 3600, grouping=True) + '원')
         print("수익률 : " + str(round(profitabilite, 6)) + "%")
-        #print("시간당 평균 수익률 : " + locale.format_string("%f", profitabilite / diff_timestamp * 3600, grouping=True) + '%')
+        #print("시간당 평균 수익률 : " + locale.format_string("%f", profitabilite / diff_second * 3600, grouping=True) + '%')
         if event >= 2:
             print('\n')
 
+evaluation_jour = []
+for p in range(int(len(profitabilite_minute) / 1440)):
+    somme = 0
+    for q in range(1440):
+        somme += profitabilite_minute[p * 1440 + q]
+    evaluation_jour.append(somme / 1440)
+
+#print(len(evaluation_jour))
+#print(evaluation_jour)
