@@ -47,7 +47,7 @@ for p in range(len(lines)):
 
             print("누적 원금 : " + locale.format_string("%d", sum(somme.values()), grouping=True) + "원")
             print("누적 평가손익 : " + locale.format_string("%d", sum(somme_profit.values()), grouping=True) + "원")
-            print("절삭잉여수익금 : " + locale.format_string("%d", montant_final - sum(somme.values()) - sum(somme_profit.values()), grouping=True) + "원")
+            print("절삭잉여수익금 : " + locale.format_string("%d", montant_final - int(sum(somme.values())) - int(sum(somme_profit.values())), grouping=True) + "원")
 
             df = pd.DataFrame(list_rangee, columns = ['채권자', '당해 평가손익', '원금 합계', '평가손익 합계'])
             print(df.to_markdown()) 
@@ -83,7 +83,7 @@ for p in range(len(lines)):
 
         print("전이벤트대비 평가손익 : " + locale.format_string("%d", evaluation, grouping=True) + '원')
         print("수익률 : " + str(round(profitabilite, 6)) + "%")
-
+        
         if event >= 2:
             print('\n')
 
