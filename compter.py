@@ -41,11 +41,12 @@ for p in range(len(lines)):
             list_rangee = []
 
             for key in somme:
-                t = evaluation * somme[key] / sum(somme.values())
                 if key in somme_profit.keys():
+                    t = evaluation * ((somme[key] + somme_profit[key]) / (sum(somme.values()) + sum(somme_profit.values())))
                     somme_profit[key] += t
                     somme_profit_list[key].append(somme_profit[key])
                 else:
+                    t = evaluation * somme[key] / sum(somme.values())
                     somme_profit[key] = t
                     user_date_initial[key] = date_initial
                     somme_profit_list[key] = [somme_profit[key]]
@@ -96,12 +97,13 @@ for p in range(len(lines)):
 
         if event >= 2:
             for key in somme:
-                t = evaluation * somme[key] / sum(somme.values())
-                print(key + ' : '+ str(t))
                 if key in somme_profit.keys():
+                    t = evaluation * ((somme[key] + somme_profit[key]) / (sum(somme.values()) + sum(somme_profit.values())))
                     somme_profit[key] += t
                 else:
+                    t = evaluation * somme[key] / sum(somme.values())
                     somme_profit[key] = t
+                print(key + ' : '+ str(t))
 
         print("전이벤트대비 평가손익 : " + locale.format_string("%d", evaluation, grouping=True) + '원')
         print("시간당 평균 평가손익 : " + locale.format_string("%d", evaluation / diff_second * 3600, grouping=True) + '원')
