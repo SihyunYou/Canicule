@@ -64,6 +64,11 @@ for p in range(len(lines)):
             print("누적 원금 : " + locale.format_string("%d", sum(somme.values()), grouping=True) + "원")
             print("누적 평가손익 : " + locale.format_string("%d", sum(somme_profit.values()), grouping=True) + "원")
 
+            print("전이벤트대비 평가손익 : " + locale.format_string("%d", evaluation, grouping=True) + '원')
+            print("시간당 평균 평가손익 : " + locale.format_string("%d", evaluation / diff_second * 3600, grouping=True) + '원')
+            print("수익률 : " + str(round(profitabilite, 6)) + "%")
+            #print("시간당 평균 수익률 : " + locale.format_string("%f", profitabilite / diff_second * 3600, grouping=True) + '%')
+
             df = pd.DataFrame(list_rangee, columns = ['채권자', '당해 평가손익', '원금 합계', '평가손익 합계', '수익률(%)', '최초자산편입일'])
             print(df.to_markdown()) 
             print('\n')
@@ -103,13 +108,27 @@ for p in range(len(lines)):
                 else:
                     t = evaluation * somme[key] / sum(somme.values())
                     somme_profit[key] = t
-                print(key + ' : '+ str(t))
+            
+            list_rangee = []
+            for key in somme:
+                rangee = []
+                rangee.append(key)
+                rangee.append(locale.format_string("%d", evaluation * somme[key] / sum(somme.values()), grouping=True))
+                rangee.append(locale.format_string("%d", somme[key], grouping=True))
+                rangee.append(locale.format_string("%d", somme_profit[key], grouping=True))
+                rangee.append(locale.format_string("%f", round(somme_profit[key] / somme[key] * 100, 3), grouping=True))
+                rangee.append(user_date_initial[key])
+                list_rangee.append(rangee)
 
-        print("전이벤트대비 평가손익 : " + locale.format_string("%d", evaluation, grouping=True) + '원')
-        print("시간당 평균 평가손익 : " + locale.format_string("%d", evaluation / diff_second * 3600, grouping=True) + '원')
-        print("수익률 : " + str(round(profitabilite, 6)) + "%")
-        #print("시간당 평균 수익률 : " + locale.format_string("%f", profitabilite / diff_second * 3600, grouping=True) + '%')
-        if event >= 2:
+            print("누적 원금 : " + locale.format_string("%d", sum(somme.values()), grouping=True) + "원")
+            print("누적 평가손익 : " + locale.format_string("%d", sum(somme_profit.values()), grouping=True) + "원")
+            print("전이벤트대비 평가손익 : " + locale.format_string("%d", evaluation, grouping=True) + '원')
+            print("시간당 평균 평가손익 : " + locale.format_string("%d", evaluation / diff_second * 3600, grouping=True) + '원')
+            print("수익률 : " + str(round(profitabilite, 6)) + "%")
+            #print("시간당 평균 수익률 : " + locale.format_string("%f", profitabilite / diff_second * 3600, grouping=True) + '%')
+
+            df2 = pd.DataFrame(list_rangee, columns = ['채권자', '당해 평가손익', '원금 합계', '평가손익 합계', '수익률(%)', '최초자산편입일'])
+            print(df2.to_markdown()) 
             print('\n')
 
 evaluation_jour = []
