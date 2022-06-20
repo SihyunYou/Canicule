@@ -125,7 +125,7 @@ def acheter_divise(_symbol, _prix_courant, _somme_totale, _taux, _fragmentation,
 
 	for n in range(1, r + 1):
 		pn = tailler(_prix_courant, (n - 1) * (1 / _fragmentation))
-		qn = a * h * n / 100 + a
+		qn = a * h * n / 100 + a #투입 금액
 		vn = qn / pn 
 
 		query = {
@@ -159,6 +159,91 @@ def acheter_divise(_symbol, _prix_courant, _somme_totale, _taux, _fragmentation,
 
 		#print(response.text)
 		time.sleep(TEMPS_SLEEP)
+
+def acheter_divise_exposant(_symbol, _prix_courant, _somme_totale, _pourcent_descente, _fois_decente, _exposant):
+	S = _somme_totale
+	h = _fois_decente
+	r = _exposant
+	a = S * (r - 1) / (pow(r, h) - 1)
+
+	for n in range(1, _fois_decente + 1):
+		pn = tailler(_prix_courant, (n - 1) * _pourcent_descente)
+		qn = a * pow(r, n - 1)
+		vn = qn / pn 
+
+		query = {
+			'market': "KRW-" + _symbol,
+			'side': 'bid',
+			'volume': str(vn), 
+			'price': str(pn),
+			'ord_type': 'limit',
+		}
+		query_string = urlencode(query).encode()
+
+		m = hashlib.sha512()
+		m.update(query_string)
+		query_hash = m.hexdigest()
+
+		payload = {
+			'access_key': KEY_ACCESS,
+			'nonce': str(uuid.uuid4()),
+			'query_hash': query_hash,
+			'query_hash_alg': 'SHA512',
+		}
+
+		jwt_token = jwt.encode(payload, KEY_SECRET)
+		authorize_token = 'Bearer {}'.format(jwt_token)
+		headers = {"Authorization": authorize_token}
+
+		response = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
+		dict_response = json.loads(response.text)
+		global uuid_achat
+		uuid_achat.append(dict_response.get('uuid'))
+
+		#print(response.text)
+		time.sleep(TEMPS_SLEEP)
+
+def acheter_divise_fibonacci(_symbol, _prix_courant, _somme_totale, _pourcent_descente, _fois_decente): # 0.5 * 16 = taux 8 
+	fibonacci = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765] # 20
+	mon_fibonacci = fibonacci[:_fois_decente - 1]
+
+	for n in range(1, _fois_decente + 1):
+		pn = tailler(_prix_courant, (n - 1) * _pourcent_descente)
+		qn = _somme_totale * fibonacci[n - 1] / sum(mon_fibonacci)
+		vn = qn / pn 
+
+		query = {
+			'market': "KRW-" + _symbol,
+			'side': 'bid',
+			'volume': str(vn), 
+			'price': str(pn),
+			'ord_type': 'limit',
+		}
+		query_string = urlencode(query).encode()
+
+		m = hashlib.sha512()
+		m.update(query_string)
+		query_hash = m.hexdigest()
+
+		payload = {
+			'access_key': KEY_ACCESS,
+			'nonce': str(uuid.uuid4()),
+			'query_hash': query_hash,
+			'query_hash_alg': 'SHA512',
+		}
+
+		jwt_token = jwt.encode(payload, KEY_SECRET)
+		authorize_token = 'Bearer {}'.format(jwt_token)
+		headers = {"Authorization": authorize_token}
+
+		response = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
+		dict_response = json.loads(response.text)
+		global uuid_achat
+		uuid_achat.append(dict_response.get('uuid'))
+
+		#print(response.text)
+		time.sleep(TEMPS_SLEEP)
+
 
 def obtenir_prix_courant(_dict_response): # 현재 종가 구하기
 	return _dict_response[0].get('trade_price')
@@ -197,7 +282,7 @@ def verifier_tendance_positive(_array_trade_price):
 
 	if(mm20 > mm60 > mm120):
 		if prix_courant * 0.04 > mm20 - mm60 > 0 and \
-			prix_courant > mm60 * 1.015:
+			prix_courant > mm60 * 1.01:
 			print("우상향 차트 검출!")
 			return 1
 		else:
@@ -222,9 +307,12 @@ def acheter_si_prix_suffit_a_verification(_symbol, _z, _somme_totale, _taux, _fr
 	if verifier_bb(20, 2, array_trade_price) == 1:
 		#verifier_tendance_positive(array_trade_price) == 1:
 		global premier_prix_achete
-		premier_prix_achete = obtenir_prix_courant(dict_response);
+		premier_prix_achete = obtenir_prix_courant(dict_response)
 
-		acheter_divise(_symbol, premier_prix_achete, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a)
+		#acheter_divise(_symbol, premier_prix_achete, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a)
+		#acheter_divise_exposant(_symbol, premier_prix_achete, _somme_totale, 1.25, 20)
+		acheter_divise_fibonacci(_symbol, premier_prix_achete, _somme_totale, 0.5, 16)
+
 		print(_symbol + "매수 신청을 완료했습니다.")
 		t = threading.Thread(target = winsound.Beep, args=(440, 500))
 		t.start()
