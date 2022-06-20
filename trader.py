@@ -13,7 +13,7 @@ import numpy as np
 import threading
 
 UNIT = 3
-DUREE_MAXIMUM = 20
+DUREE_MAXIMUM = 120
 C_MULTIPLICATION_LARGEUR_BANDE = 1.2
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 KEY_ACCESS = ""
@@ -34,7 +34,11 @@ def animater(s):
 
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
-	if t < 10: 
+	if t < 0.1:
+		t = round(t, 4)
+	elif t < 1:
+		t = round(t, 3)
+	elif t < 10: 
 		t = round(t, 2)
 	elif 10 <= t < 100:
 		t = round(t, 1)
@@ -167,9 +171,9 @@ def obtenir_array_trade_price(_dict_response, _n): # 종가 리스트 구하기
 
 def verifier_bb(_n, _z, _array_trade_price):
 	prix_courant = _array_trade_price[-1]
-	bb_milieu = np.mean(np.array(_array_trade_price)) 
-	bb_haut = bb_milieu + np.std(np.array(_array_trade_price)) * _z
-	bb_bas = bb_milieu - np.std(np.array(_array_trade_price)) * _z
+	bb_milieu = np.mean(np.array(_array_trade_price)[-1 * _n : -1]) 
+	bb_haut = bb_milieu + np.std(np.array(_array_trade_price)[-1 * _n : -1]) * _z
+	bb_bas = bb_milieu - np.std(np.array(_array_trade_price)[-1 * _n : -1]) * _z
 	global C_MULTIPLICATION_LARGEUR_BANDE
 	largeur_bande_minimum = prix_courant / 100 * C_MULTIPLICATION_LARGEUR_BANDE
 
@@ -181,10 +185,27 @@ def verifier_bb(_n, _z, _array_trade_price):
 		if prix_courant < bb_bas:
 			print("볼밴이탈 검출!")
 			return 1
-		return 0
+		else:
+			return 0
 	return -1
 
-def acheter_si_criteres_suffits(_symbol, _z, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a):
+def verifier_tendance_positive(_array_trade_price):
+	prix_courant = _array_trade_price[-1]
+	mm20 = np.mean(np.array(_array_trade_price)[-20 : -1])
+	mm60 = np.mean(np.array(_array_trade_price)[-60 : -1])
+	mm120 = np.mean(np.array(_array_trade_price)[-120 : -1])
+
+	if(mm20 > mm60 > mm120):
+		if prix_courant * 0.04 > mm20 - mm60 > 0 and \
+			prix_courant > mm60 * 1.015:
+			print("우상향 차트 검출!")
+			return 1
+		else:
+			return 0
+	else:
+		return -1
+
+def acheter_si_prix_suffit_a_verification(_symbol, _z, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a):
 	global DUREE_MAXIMUM
 	querystring = {"market":"KRW-"+_symbol,"count":str(DUREE_MAXIMUM)}
 
@@ -197,18 +218,20 @@ def acheter_si_criteres_suffits(_symbol, _z, _somme_totale, _taux, _fragmentatio
 		return False
 	
 	#print("심볼 : " + _symbol)
-	if(verifier_bb(20, 2, array_trade_price) <= 0):
+
+	if verifier_bb(20, 2, array_trade_price) == 1:
+		#verifier_tendance_positive(array_trade_price) == 1:
+		global premier_prix_achete
+		premier_prix_achete = obtenir_prix_courant(dict_response);
+
+		acheter_divise(_symbol, premier_prix_achete, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a)
+		print(_symbol + "매수 신청을 완료했습니다.")
+		t = threading.Thread(target = winsound.Beep, args=(440, 500))
+		t.start()
+
+		return True
+	else:
 		return False
-
-	global premier_prix_achete
-	premier_prix_achete = obtenir_prix_courant(dict_response);
-
-	acheter_divise(_symbol, premier_prix_achete, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a)
-	print(_symbol + "매수 신청을 완료했습니다.")
-	t = threading.Thread(target = winsound.Beep, args=(440, 500))
-	t.start()
-
-	return True
 
 def examiner_compte():
 	payload = {
@@ -420,7 +443,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
 			if(premier_prix_achete > 0):
-				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.2
+				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.12
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
@@ -468,8 +491,8 @@ def obtenir_list_symbol():
 			for i in range(24):
 				acc_trade_price += dict_response2[i].get('candle_acc_trade_price')
 
-			if(7 < prix < 9 or 50 < prix < 90 or 400 < prix < 900 or 3300 < prix):
-				if(acc_trade_price > 5000000000):
+			if(0.04 < prix < 0.09 or 0.4 < prix < 0.9 or 4 < prix < 9 or 40 < prix < 90 or 400 < prix < 900 or 3200 < prix):
+				if(acc_trade_price > 8000000000):
 					list_symbol.append(market[4:])
 
 	print(list_symbol)
@@ -575,7 +598,7 @@ if __name__=="__main__":
 					break
 				animater("모니터링 중... ")
 					
-				if(acheter_si_criteres_suffits(symbol, z, S, t, f, x)):
+				if(acheter_si_prix_suffit_a_verification(symbol, z, S, t, f, x)):
 					nom_symbol = symbol
 					breakable = True
 				else:
