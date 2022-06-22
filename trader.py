@@ -80,7 +80,7 @@ class Diviser:
 		for n in range(1, _fois_decente + 1):
 			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
 			qn = a * h * n / 100 + a #투입 금액
-			acheter(pn, qn)
+			self.acheter(pn, qn)
 
 	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant):
 		h = _fois_decente
@@ -90,7 +90,7 @@ class Diviser:
 		for n in range(1, _fois_decente + 1):
 			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
 			qn = a * pow(r, n - 1)
-			acheter(pn, qn)
+			self.acheter(pn, qn)
 
 	def diviser_lucas(self, _pourcent_descente, _fois_decente):
 		lucas = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
@@ -99,7 +99,7 @@ class Diviser:
 		for n in range(1, _fois_decente + 1):
 			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
 			qn = self.S * lucas[n - 1] / sum(mon_lucas)
-			acheter(pn, qn) 
+			self.acheter(pn, qn) 
 
 	def acheter(self, _pn, _qn):
 		query = {
@@ -538,7 +538,7 @@ if __name__=="__main__":
 					break
 				animater("모니터링 중... ")
 					
-				if(acheter_si_prix_suffit_a_verification(symbol, z, S, t, f, x)):
+				if(acheter_si_prix_suffit_a_verification(symbol, S)):
 					nom_symbol = symbol
 					breakable = True
 				else:
@@ -552,7 +552,7 @@ if __name__=="__main__":
 				print("시간 초과.")
 				break
 
-			if(administrer_vente(nom_symbol, S, v)):
+			if(administrer_vente(nom_symbol, S, 0.3)):
 				fault = 0
 			else:
 				fault += 1
