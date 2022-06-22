@@ -14,17 +14,17 @@ import threading
 
 UNIT = 3
 DUREE_MAXIMUM = 120
-C_MULTIPLICATION_LARGEUR_BANDE = 1.2
+TEMPS_SLEEP = 0.23
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 KEY_ACCESS = ""
 KEY_SECRET = ""
 URL_SERVEUR = 'https://api.upbit.com'
+
 uuid_achat = []
 uuid_vente = ""
 premier_prix_achete = 0
-idx = 0
-TEMPS_SLEEP = 0.25
 
+idx = 0
 def animater(s):
 	animation = "|/-\\"
 	global idx
@@ -65,74 +65,48 @@ def tailler(_prix, _taux):
 
 	return t
 
-def acheter_prix_marche(_symbol, _montant):
-	query = {
-		'market': 'KRW-'+ _symbol,
-		'side': 'bid',
-		'price': str(_montant),
-		'ord_type': 'price',
-	}
-	query_string = urlencode(query).encode()
 
-	m = hashlib.sha512()
-	m.update(query_string)
-	query_hash = m.hexdigest()
+class Diviser:
+	def __init__(self, _symbol, _prix_courant, _somme_totale):
+		self.symbol = _symbol
+		self.prix_courant = _prix_courant
+		self.S = _somme_totale
 
-	payload = {
-		'access_key': KEY_ACCESS,
-		'nonce': str(uuid.uuid4()),
-		'query_hash': query_hash,
-		'query_hash_alg': 'SHA512',
-	}
+	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
+		r = _fois_decente
+		h = _difference
+		a = self.S / (r * ((r + 1) * h / 200 + 1))
 
-	jwt_token = jwt.encode(payload, KEY_SECRET)
-	authorize_token = 'Bearer {}'.format(jwt_token)
-	headers = {"Authorization": authorize_token}
+		for n in range(1, _fois_decente + 1):
+			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			qn = a * h * n / 100 + a #투입 금액
+			acheter(pn, qn)
 
-	res = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
+	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant):
+		h = _fois_decente
+		r = _exposant
+		a = self.S * (r - 1) / (pow(r, h) - 1)
 
-def vendre_prix_marche(_symbol, _volume):
-	query = {
-		'market': 'KRW-'+ _symbol,
-		'side': 'ask',
-		'volume': str(_volume),
-		'ord_type': 'market',
-	}
-	query_string = urlencode(query).encode()
+		for n in range(1, _fois_decente + 1):
+			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			qn = a * pow(r, n - 1)
+			acheter(pn, qn)
 
-	m = hashlib.sha512()
-	m.update(query_string)
-	query_hash = m.hexdigest()
+	def diviser_lucas(self, _pourcent_descente, _fois_decente):
+		lucas = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
+		mon_lucas = lucas[:_fois_decente - 1]
 
-	payload = {
-		'access_key': KEY_ACCESS,
-		'nonce': str(uuid.uuid4()),
-		'query_hash': query_hash,
-		'query_hash_alg': 'SHA512',
-	}
+		for n in range(1, _fois_decente + 1):
+			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			qn = self.S * lucas[n - 1] / sum(mon_lucas)
+			acheter(pn, qn) 
 
-	jwt_token = jwt.encode(payload, KEY_SECRET)
-	authorize_token = 'Bearer {}'.format(jwt_token)
-	headers = {"Authorization": authorize_token}
-
-	res = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
-
-def acheter_divise(_symbol, _prix_courant, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a):
-	S = _somme_totale
-	r = _taux * _fragmentation
-	h = _taux_augmentation_de_a
-	a = S / (r * ((r + 1) * h / 200 + 1))
-
-	for n in range(1, r + 1):
-		pn = tailler(_prix_courant, (n - 1) * (1 / _fragmentation))
-		qn = a * h * n / 100 + a #투입 금액
-		vn = qn / pn 
-
+	def acheter(self, _pn, _qn):
 		query = {
-			'market': "KRW-" + _symbol,
+			'market': "KRW-" + self.symbol,
 			'side': 'bid',
-			'volume': str(vn), 
-			'price': str(pn),
+			'volume': str(_qn / _pn), 
+			'price': str(_pn),
 			'ord_type': 'limit',
 		}
 		query_string = urlencode(query).encode()
@@ -160,89 +134,50 @@ def acheter_divise(_symbol, _prix_courant, _somme_totale, _taux, _fragmentation,
 		#print(response.text)
 		time.sleep(TEMPS_SLEEP)
 
-def acheter_divise_exposant(_symbol, _prix_courant, _somme_totale, _pourcent_descente, _fois_decente, _exposant):
-	S = _somme_totale
-	h = _fois_decente
-	r = _exposant
-	a = S * (r - 1) / (pow(r, h) - 1)
 
-	for n in range(1, _fois_decente + 1):
-		pn = tailler(_prix_courant, (n - 1) * _pourcent_descente)
-		qn = a * pow(r, n - 1)
-		vn = qn / pn 
+class Verifier:
+	def __init__(self, _array_trade_price):
+		self.prix_courant = _array_trade_price[-1]
+		self.array_trade_price = _array_trade_price
 
-		query = {
-			'market': "KRW-" + _symbol,
-			'side': 'bid',
-			'volume': str(vn), 
-			'price': str(pn),
-			'ord_type': 'limit',
-		}
-		query_string = urlencode(query).encode()
+	def verifier_bb(self, _n, _z):
+		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
+		bb_haut = bb_milieu + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
+		bb_bas = bb_milieu - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
+		C_MULTIPLICATION_LARGEUR_BANDE = 1.2
+		largeur_bande_minimum = prix_courant / 100 * C_MULTIPLICATION_LARGEUR_BANDE
 
-		m = hashlib.sha512()
-		m.update(query_string)
-		query_hash = m.hexdigest()
+		#print("최소 밴드폭 : " + str(largeur_bande_minimum))
+		#print("볼린저밴드 상단 : " + str(bb_haut))
+		#print("볼린저밴드 하단 : " + str(bb_bas))
+	
+		if(bb_haut - bb_bas > largeur_bande_minimum):
+			if self.prix_courant < bb_bas:
+				print("볼밴이탈 검출!")
+				return True
+		return False
 
-		payload = {
-			'access_key': KEY_ACCESS,
-			'nonce': str(uuid.uuid4()),
-			'query_hash': query_hash,
-			'query_hash_alg': 'SHA512',
-		}
+	def verifier_tendance_positive(self):
+		mm20 = np.mean(np.array(self.array_trade_price)[-20 : -1])
+		mm60 = np.mean(np.array(self.array_trade_price)[-60 : -1])
+		mm120 = np.mean(np.array(self.array_trade_price)[-120 : -1])
 
-		jwt_token = jwt.encode(payload, KEY_SECRET)
-		authorize_token = 'Bearer {}'.format(jwt_token)
-		headers = {"Authorization": authorize_token}
+		if(mm20 > mm60 > mm120):
+			if self.prix_courant * 0.04 > mm20 - mm60 > 0 and \
+				self.prix_courant > mm60 * 1.01:
+				print("우상향 차트 검출!")
+				return True
+		return False
 
-		response = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
-		dict_response = json.loads(response.text)
-		global uuid_achat
-		uuid_achat.append(dict_response.get('uuid'))
-
-		#print(response.text)
-		time.sleep(TEMPS_SLEEP)
-
-def acheter_divise_fibonacci(_symbol, _prix_courant, _somme_totale, _pourcent_descente, _fois_decente): # 0.5 * 16 = taux 8 
-	fibonacci = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765] # 20
-	mon_fibonacci = fibonacci[:_fois_decente - 1]
-
-	for n in range(1, _fois_decente + 1):
-		pn = tailler(_prix_courant, (n - 1) * _pourcent_descente)
-		qn = _somme_totale * fibonacci[n - 1] / sum(mon_fibonacci)
-		vn = qn / pn 
-
-		query = {
-			'market': "KRW-" + _symbol,
-			'side': 'bid',
-			'volume': str(vn), 
-			'price': str(pn),
-			'ord_type': 'limit',
-		}
-		query_string = urlencode(query).encode()
-
-		m = hashlib.sha512()
-		m.update(query_string)
-		query_hash = m.hexdigest()
-
-		payload = {
-			'access_key': KEY_ACCESS,
-			'nonce': str(uuid.uuid4()),
-			'query_hash': query_hash,
-			'query_hash_alg': 'SHA512',
-		}
-
-		jwt_token = jwt.encode(payload, KEY_SECRET)
-		authorize_token = 'Bearer {}'.format(jwt_token)
-		headers = {"Authorization": authorize_token}
-
-		response = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
-		dict_response = json.loads(response.text)
-		global uuid_achat
-		uuid_achat.append(dict_response.get('uuid'))
-
-		#print(response.text)
-		time.sleep(TEMPS_SLEEP)
+	def verifier_std(self, _n, _z):
+		mm20 = np.mean(np.array(self.array_trade_price)[-20 : -1])
+		longeur = 2 * np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
+		pourcent = longeur / self.prix_courant
+	
+		if(0.03 < pourcent < 0.15 and self.prix_courant > mm20):
+			print("표준편차 이탈 검출!")
+			return True
+		return False
 
 
 def obtenir_prix_courant(_dict_response): # 현재 종가 구하기
@@ -254,43 +189,7 @@ def obtenir_array_trade_price(_dict_response, _n): # 종가 리스트 구하기
 		arr[_n - i - 1] = _dict_response[i].get('trade_price')
 	return arr
 
-def verifier_bb(_n, _z, _array_trade_price):
-	prix_courant = _array_trade_price[-1]
-	bb_milieu = np.mean(np.array(_array_trade_price)[-1 * _n : -1]) 
-	bb_haut = bb_milieu + np.std(np.array(_array_trade_price)[-1 * _n : -1]) * _z
-	bb_bas = bb_milieu - np.std(np.array(_array_trade_price)[-1 * _n : -1]) * _z
-	global C_MULTIPLICATION_LARGEUR_BANDE
-	largeur_bande_minimum = prix_courant / 100 * C_MULTIPLICATION_LARGEUR_BANDE
-
-	#print("최소 밴드폭 : " + str(largeur_bande_minimum))
-	#print("볼린저밴드 상단 : " + str(bb_haut))
-	#print("볼린저밴드 하단 : " + str(bb_bas))
-	
-	if(bb_haut - bb_bas > largeur_bande_minimum):
-		if prix_courant < bb_bas:
-			print("볼밴이탈 검출!")
-			return 1
-		else:
-			return 0
-	return -1
-
-def verifier_tendance_positive(_array_trade_price):
-	prix_courant = _array_trade_price[-1]
-	mm20 = np.mean(np.array(_array_trade_price)[-20 : -1])
-	mm60 = np.mean(np.array(_array_trade_price)[-60 : -1])
-	mm120 = np.mean(np.array(_array_trade_price)[-120 : -1])
-
-	if(mm20 > mm60 > mm120):
-		if prix_courant * 0.04 > mm20 - mm60 > 0 and \
-			prix_courant > mm60 * 1.01:
-			print("우상향 차트 검출!")
-			return 1
-		else:
-			return 0
-	else:
-		return -1
-
-def acheter_si_prix_suffit_a_verification(_symbol, _z, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a):
+def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매집
 	global DUREE_MAXIMUM
 	querystring = {"market":"KRW-"+_symbol,"count":str(DUREE_MAXIMUM)}
 
@@ -304,14 +203,17 @@ def acheter_si_prix_suffit_a_verification(_symbol, _z, _somme_totale, _taux, _fr
 	
 	#print("심볼 : " + _symbol)
 
-	if verifier_bb(20, 2, array_trade_price) == 1:
-		#verifier_tendance_positive(array_trade_price) == 1:
+	v = Verifier(array_trade_price)
+	#if v.verifier_bb(20, 2):
+	#if v.verifier_tendance_positive():
+	if v.verifier_std(20, 2): # 표준편차 이탈 관찰
 		global premier_prix_achete
 		premier_prix_achete = obtenir_prix_courant(dict_response)
 
-		#acheter_divise(_symbol, premier_prix_achete, _somme_totale, _taux, _fragmentation, _taux_augmentation_de_a)
-		#acheter_divise_exposant(_symbol, premier_prix_achete, _somme_totale, 1.25, 20)
-		acheter_divise_fibonacci(_symbol, premier_prix_achete, _somme_totale, 0.5, 16)
+		d = Diviser(_symbol, premier_prix_achete, _somme_totale)
+		#d.diviser_lineaire(0.333, 36, 10000) # 선형 매집
+		d.diviser_exposant(0.4, 30, 1.2) # 지수 매집
+		#d.diviser_lucas(0.5, 16) # 뤼카수열 매집
 
 		print(_symbol + "매수 신청을 완료했습니다.")
 		t = threading.Thread(target = winsound.Beep, args=(440, 500))
@@ -574,13 +476,13 @@ def obtenir_list_symbol():
 			except:
 				raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(2)")
 
-			prix = dict_response2[0].get('trade_price')
+			prix = obtenir_prix_courant(dict_response2)
 			acc_trade_price = 0
 			for i in range(24):
 				acc_trade_price += dict_response2[i].get('candle_acc_trade_price')
 
 			if(0.04 < prix < 0.09 or 0.4 < prix < 0.9 or 4 < prix < 9 or 40 < prix < 90 or 400 < prix < 900 or 3200 < prix):
-				if(acc_trade_price > 8000000000):
+				if(acc_trade_price > 8000000000): #8000백만
 					list_symbol.append(market[4:])
 
 	print(list_symbol)
@@ -595,72 +497,22 @@ def obtenir_montant_KRW():
 	return 0
 			
 if __name__=="__main__":
-	f = open("key.txt", 'r')
 	with open("key.txt", 'r') as f:
 		KEY_ACCESS = f.readline().strip()
 		KEY_SECRET = f.readline().strip()
 		print("KEY_ACCESS : " + KEY_ACCESS)
 		print("KEY_SECRET : " + KEY_SECRET)
 
-	T_TIMEOUT = 60
+	T_TIMEOUT = 40
 
 	parser = argparse.ArgumentParser(description="J'EN SAIS RIEN.")
 	parser.add_argument('-s', type=int, required=False, help='-s : 투입할 총액. 미설정 시, 업비트에 있는 총 보유KRW이 투입됩니다.')
-	parser.add_argument('-n', type=int, help='-n : 밴드를 관찰할 n분봉의 n 값 (ex. 1, 3, 5, 10, 15, 30...)')
-	parser.add_argument('-z', type=float, help='-z : 볼린저 밴드의 표준정규분포 곱상수. 값이 커질수록 저점에서 매수할 수 있으나 매수포착 기회가 줄어듭니다.')
-	parser.add_argument('-t', type=int, help='-t : 최종 매수 지점의 상위비율 (ex. t가 6이라면, 첫 분할매수액의 94퍼까지 분할매수주문을 요청합니다.)')
-	parser.add_argument('-f', type=int, help='-f : 1% 당 분절할 분할매수주문 개수 (ex. f가 4라면, 0.25%의 비율로 분할매수합니다.)')
-	parser.add_argument('-x', type=int, help='-x : 분할매수할 주문액의 증가비율')
-	parser.add_argument('-m', type=float, help='-m : 매수 제한 밴드 폭의 길이. 값이 커질수록 저점에서 매수할 수 있으나 매수포착 기회가 줄어듭니다.')
-	parser.add_argument('-v', type=float, help='-v : 매도 지점 비율')
 	args = parser.parse_args()
 	
 	Sp = S = obtenir_montant_KRW()
 	print("총 보유 KRW : " + format(int(S), ','))
 	
 	list_symbol = obtenir_list_symbol()
-	z = t = f = x = 0
-
-	DEFAULT_Z = 2
-	DEFAULT_T = 11
-	DEFAULT_F = 3
-	DEFAULT_X = 8192
-	DEFAULT_V = 0.34
-
-	if(args.n is not None):
-		UNIT = args.n
-	else:
-		pass
-
-	if(args.z is not None): 
-		z = args.z
-	else: 
-		z = DEFAULT_Z
-	
-	if(args.t is not None): 
-		t = args.t
-	else: 
-		t = DEFAULT_T
-
-	if(args.f is not None): 
-		f = args.f
-	else: 
-		f = DEFAULT_F
-
-	if(args.x is not None): 
-		x = args.x
-	else: 
-		x = DEFAULT_X
-
-	if(args.v is not None): 
-		v = args.v
-	else: 
-		v = DEFAULT_V
-
-	if(args.m is not None):
-		C_MULTIPLICATION_LARGEUR_BANDE = args.m
-	else:
-		pass
 
 	Commission = 0.9995
 	if(args.s is not None):
