@@ -14,23 +14,15 @@ import threading
 
 UNIT = 3
 DUREE_MAXIMUM = 120
-TEMPS_SLEEP = 0.23
+TEMPS_SLEEP = 0.22
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
-KEY_ACCESS = ""
-KEY_SECRET = ""
+CLE_ACCES = ""
+CLE_SECRET = ""
 URL_SERVEUR = 'https://api.upbit.com'
 
 uuid_achat = []
 uuid_vente = ""
 premier_prix_achete = 0
-
-idx = 0
-def animater(s):
-	animation = "|/-\\"
-	global idx
-
-	idx += 1
-	print(s + animation[idx % len(animation)], end="\r")
 
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
@@ -116,13 +108,13 @@ class Diviser:
 		query_hash = m.hexdigest()
 
 		payload = {
-			'access_key': KEY_ACCESS,
+			'access_key': CLE_ACCES,
 			'nonce': str(uuid.uuid4()),
 			'query_hash': query_hash,
 			'query_hash_alg': 'SHA512',
 		}
 
-		jwt_token = jwt.encode(payload, KEY_SECRET)
+		jwt_token = jwt.encode(payload, CLE_SECRET)
 		authorize_token = 'Bearer {}'.format(jwt_token)
 		headers = {"Authorization": authorize_token}
 
@@ -139,6 +131,13 @@ class Verifier:
 	def __init__(self, _array_trade_price):
 		self.prix_courant = _array_trade_price[-1]
 		self.array_trade_price = _array_trade_price
+
+	def verfier_surete(self): # 동적 보호매수
+		p = self.array_trade_price[-20]
+		q = self.array_trade_price[-1]
+		if - 0.1 < (q - p) / self.prix_courant < 0.25:
+			return True
+		return False
 
 	def verifier_bb(self, _n, _z):
 		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
@@ -206,30 +205,30 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 	v = Verifier(array_trade_price)
 	#if v.verifier_bb(20, 2):
 	#if v.verifier_tendance_positive():
-	if v.verifier_std(20, 2): # 표준편차 이탈 관찰
-		global premier_prix_achete
-		premier_prix_achete = obtenir_prix_courant(dict_response)
+	if v.verfier_surete():
+		if v.verifier_std(20, 2): # 표준편차 이탈 관찰
+			global premier_prix_achete
+			premier_prix_achete = obtenir_prix_courant(dict_response)
 
-		d = Diviser(_symbol, premier_prix_achete, _somme_totale)
-		#d.diviser_lineaire(0.333, 36, 10000) # 선형 매집
-		d.diviser_exposant(0.4, 30, 1.2) # 지수 매집
-		#d.diviser_lucas(0.5, 16) # 뤼카수열 매집
+			d = Diviser(_symbol, premier_prix_achete, _somme_totale)
+			#d.diviser_lineaire(0.333, 36, 10000) # 선형 매집
+			d.diviser_exposant(0.36, 28, 1.2) # 지수 매집
+			#d.diviser_lucas(0.5, 16) # 뤼카수열 매집
 
-		print(_symbol + "매수 신청을 완료했습니다.")
-		t = threading.Thread(target = winsound.Beep, args=(440, 500))
-		t.start()
+			print(_symbol + "매수 신청을 완료했습니다.")
+			t = threading.Thread(target = winsound.Beep, args=(440, 500))
+			t.start()
 
-		return True
-	else:
-		return False
+			return True
+	return False
 
 def examiner_compte():
 	payload = {
-		'access_key': KEY_ACCESS,
+		'access_key': CLE_ACCES,
 		'nonce': str(uuid.uuid4()),
 	}
 
-	jwt_token = jwt.encode(payload, KEY_SECRET)
+	jwt_token = jwt.encode(payload, CLE_SECRET)
 	authorize_token = 'Bearer {}'.format(jwt_token)
 	headers = {"Authorization": authorize_token}
 
@@ -255,7 +254,7 @@ def examiner_symbol_compte(_symbol):
 	return -1, -1, -1
 
 def annuler_ordre_achat():
-	global KEY_ACCESS
+	global CLE_ACCES
 	global uuid_achat
 
 	while(True):
@@ -271,13 +270,13 @@ def annuler_ordre_achat():
 				query_hash = m.hexdigest()
 
 				payload = {
-					'access_key': KEY_ACCESS,
+					'access_key': CLE_ACCES,
 					'nonce': str(uuid.uuid4()),
 					'query_hash': query_hash,
 					'query_hash_alg': 'SHA512',
 				}
 
-				jwt_token = jwt.encode(payload, KEY_SECRET)
+				jwt_token = jwt.encode(payload, CLE_SECRET)
 				authorize_token = 'Bearer {}'.format(jwt_token)
 				headers = {"Authorization": authorize_token}
 
@@ -294,7 +293,7 @@ def annuler_ordre_achat():
 			time.sleep(TEMPS_SLEEP)
 
 def annuler_ordre_vente():
-	global KEY_ACCESS
+	global CLE_ACCES
 	global uuid_vente
 
 	while(True):
@@ -309,13 +308,13 @@ def annuler_ordre_vente():
 			query_hash = m.hexdigest()
 
 			payload = {
-				'access_key': KEY_ACCESS,
+				'access_key': CLE_ACCES,
 				'nonce': str(uuid.uuid4()),
 				'query_hash': query_hash,
 				'query_hash_alg': 'SHA512',
 			}
 
-			jwt_token = jwt.encode(payload, KEY_SECRET)
+			jwt_token = jwt.encode(payload, CLE_SECRET)
 			authorize_token = 'Bearer {}'.format(jwt_token)
 			headers = {"Authorization": authorize_token}
 
@@ -391,13 +390,13 @@ def vendre_biens(_symbol, _volume, _prix):
 	query_hash = m.hexdigest()
 
 	payload = {
-		'access_key': KEY_ACCESS,
+		'access_key': CLE_ACCES,
 		'nonce': str(uuid.uuid4()),
 		'query_hash': query_hash,
 		'query_hash_alg': 'SHA512',
 	}
 
-	jwt_token = jwt.encode(payload, KEY_SECRET)
+	jwt_token = jwt.encode(payload, CLE_SECRET)
 	authorize_token = 'Bearer {}'.format(jwt_token)
 	headers = {"Authorization": authorize_token}
 
@@ -432,7 +431,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 			time.sleep(1)
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
-			if(premier_prix_achete > 0):
+			if premier_prix_achete > 0:
 				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.12
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
@@ -481,8 +480,9 @@ def obtenir_list_symbol():
 			for i in range(24):
 				acc_trade_price += dict_response2[i].get('candle_acc_trade_price')
 
-			if(0.04 < prix < 0.09 or 0.4 < prix < 0.9 or 4 < prix < 9 or 40 < prix < 90 or 400 < prix < 900 or 3200 < prix):
-				if(acc_trade_price > 8000000000): #8000백만
+			if 0.04 < prix < 0.09 or 0.4 < prix < 0.9 or 4 < prix < 9 or \
+				40 < prix < 90 or 400 < prix < 900 or 3200 < prix:
+				if acc_trade_price > 8000000000: #8,000백만
 					list_symbol.append(market[4:])
 
 	print(list_symbol)
@@ -495,13 +495,19 @@ def obtenir_montant_KRW():
 		if mon_dict.get('currency') == "KRW":
 			return float(mon_dict.get('balance'))
 	return 0
-			
+
+def animater(s):
+	animation = "|/-\\"
+	animater.idx += 1
+	print(s + animation[idx % len(animation)], end="\r")
+animater.idx = 0
+
 if __name__=="__main__":
 	with open("key.txt", 'r') as f:
-		KEY_ACCESS = f.readline().strip()
-		KEY_SECRET = f.readline().strip()
-		print("KEY_ACCESS : " + KEY_ACCESS)
-		print("KEY_SECRET : " + KEY_SECRET)
+		CLE_ACCES = f.readline().strip()
+		CLE_SECRET = f.readline().strip()
+		print("CLE_ACCES : " + CLE_ACCES)
+		print("CLE_SECRET : " + CLE_SECRET)
 
 	T_TIMEOUT = 40
 
@@ -516,8 +522,8 @@ if __name__=="__main__":
 
 	Commission = 0.9995
 	if(args.s is not None):
-		if(args.s < 2000000):
-			print("2,000,000원 이상을 입력해야 합니다.")
+		if(args.s < 5000000):
+			print("5,000,000원 이상을 입력해야 합니다.")
 			exit()
 		else:
 			S = int(args.s * Commission)
