@@ -180,7 +180,7 @@ class Verifier:
 		p = 0.036 - std_bas
 		q = 0.12
 		if(p < pourcent < q and self.prix_courant > bb_bas):
-			print("표준편차 이탈 검출! : " + str(p))
+			print("표준편차 이탈 검출! : " + str(round(p, 3)))
 			return True
 		return False
 
@@ -216,7 +216,8 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 	global DERNIER_SYMBOL
 	global std_bas
 	if _symbol == DERNIER_SYMBOL:
-		std_bas += 0.002
+		if std_bas <= 0.016: 
+			std_bas += 0.002
 
 	if v.verfier_surete():
 		if v.verifier_std(20, 2): # 표준편차 이탈 관찰
