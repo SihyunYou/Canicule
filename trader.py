@@ -128,6 +128,7 @@ class Diviser:
 		time.sleep(TEMPS_SLEEP)
 
 
+std_bas = 0
 class Verifier:
 	def __init__(self, _array_trade_price):
 		self.prix_courant = _array_trade_price[-1]
@@ -175,8 +176,11 @@ class Verifier:
 		longeur = 2 * np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
 		pourcent = longeur / self.prix_courant
 	
-		if(0.03 < pourcent < 0.15 and self.prix_courant > bb_bas):
-			print("표준편차 이탈 검출!")
+		global std_bas
+		p = 0.036 - std_bas
+		q = 0.12
+		if(p < pourcent < q and self.prix_courant > bb_bas):
+			print("표준편차 이탈 검출! : " + str(p))
 			return True
 		return False
 
@@ -190,6 +194,7 @@ def obtenir_array_trade_price(_dict_response, _n): # 종가 리스트 구하기
 		arr[_n - i - 1] = _dict_response[i].get('trade_price')
 	return arr
 
+DERNIER_SYMBOL = ''
 def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매집
 	global DUREE_MAXIMUM
 	querystring = {"market":"KRW-"+_symbol,"count":str(DUREE_MAXIMUM)}
@@ -207,6 +212,12 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 	v = Verifier(array_trade_price)
 	#if v.verifier_bb(20, 2):
 	#if v.verifier_tendance_positive():
+
+	global DERNIER_SYMBOL
+	global std_bas
+	if _symbol == DERNIER_SYMBOL:
+		std_bas += 0.002
+
 	if v.verfier_surete():
 		if v.verifier_std(20, 2): # 표준편차 이탈 관찰
 			global premier_prix_achete
@@ -216,7 +227,8 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 			#d.diviser_lineaire(0.333, 36, 10000) # 선형 매집
 			d.diviser_exposant(0.38, 29, 1.19) # 지수 매집
 			#d.diviser_lucas(0.5, 16) # 뤼카수열 매집
-
+			
+			std_bas = 0
 			print(_symbol + "매수 신청을 완료했습니다.")
 			t = threading.Thread(target = winsound.Beep, args=(440, 500))
 			t.start()
@@ -434,7 +446,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
 			if premier_prix_achete > 0:
-				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.12
+				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.01
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
@@ -487,6 +499,8 @@ def obtenir_list_symbol():
 				if acc_trade_price > 8000000000: #8,000백만
 					list_symbol.append(market[4:])
 
+	global DERNIER_SYMBOL
+	DERNIER_SYMBOL = list_symbol[-1]
 	print(list_symbol)
 	print("매수 기준에 충족하는 위 코인 목록을 모니터링합니다.")
 
