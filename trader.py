@@ -11,18 +11,18 @@ import winsound
 import argparse
 import numpy as np
 import threading
+from tqdm import tqdm
 
 UNIT = 3
 DUREE_MAXIMUM = 120
-TEMPS_SLEEP = 0.22
+TEMPS_SLEEP = 0.21
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
-CLE_ACCES = ""
-CLE_SECRET = ""
-URL_SERVEUR = 'https://api.upbit.com'
+CLE_ACCES = ''
+CLE_SECRET = ''
+URL_SERVEUR = "https://api.upbit.com"
 
 uuid_achat = []
-uuid_vente = ""
-premier_prix_achete = 0
+uuid_vente = ''
 
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
@@ -127,7 +127,9 @@ class Diviser:
 		time.sleep(TEMPS_SLEEP)
 
 
-class Verifier:
+symbol_std_le_plus = ['', -1]
+DERNIER_SYMBOL = ''
+class Cocher:
 	def __init__(self, _array_trade_price):
 		self.prix_courant = _array_trade_price[-1]
 		self.array_trade_price = _array_trade_price
@@ -168,13 +170,18 @@ class Verifier:
 				return True
 		return False
 
-	def verifier_std(self, _n, _z):
-		mm20 = np.mean(np.array(self.array_trade_price)[-20 : -1])
+	def trouver_std_le_plus(self, _symbol, _n, _z):
 		longeur = 2 * np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
 		pourcent = longeur / self.prix_courant
-	
-		if(0.03 < pourcent < 0.15 and self.prix_courant > mm20):
-			print("표준편차 이탈 검출!")
+		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
+		bb_bas = mm20 - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
+		global symbol_std_le_plus
+
+		if symbol_std_le_plus[1] < pourcent and self.prix_courant > bb_bas and 0.03 < pourcent < 0.15:
+			symbol_std_le_plus[0] = _symbol
+			symbol_std_le_plus[1] = pourcent
+		
+		if DERNIER_SYMBOL == _symbol:
 			return True
 		return False
 
@@ -188,6 +195,8 @@ def obtenir_array_trade_price(_dict_response, _n): # 종가 리스트 구하기
 		arr[_n - i - 1] = _dict_response[i].get('trade_price')
 	return arr
 
+
+premier_prix_achete = 0
 def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매집
 	global DUREE_MAXIMUM
 	querystring = {"market":"KRW-"+_symbol,"count":str(DUREE_MAXIMUM)}
@@ -202,23 +211,29 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 	
 	#print("심볼 : " + _symbol)
 
-	v = Verifier(array_trade_price)
-	#if v.verifier_bb(20, 2):
-	#if v.verifier_tendance_positive():
-	if v.verfier_surete():
-		if v.verifier_std(20, 2): # 표준편차 이탈 관찰
+	c = Cocher(array_trade_price)
+	#if c.verifier_bb(20, 2):
+	#if c.verifier_tendance_positive():
+	if c.verfier_surete():
+		if c.trouver_std_le_plus(_symbol, 20, 2): # 표준편차 이탈 관찰
+			global symbol_std_le_plus
+			if symbol_std_le_plus[1] < 0.03:
+				symbol_std_le_plus = ['', -1]
+				return False
+			
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
-
-			d = Diviser(_symbol, premier_prix_achete, _somme_totale)
+			d = Diviser(symbol_std_le_plus[0], premier_prix_achete, _somme_totale)
 			#d.diviser_lineaire(0.333, 36, 10000) # 선형 매집
-			d.diviser_exposant(0.36, 28, 1.2) # 지수 매집
+			d.diviser_exposant(0.38, 29, 1.18) # 지수 매집
 			#d.diviser_lucas(0.5, 16) # 뤼카수열 매집
 
 			print(_symbol + "매수 신청을 완료했습니다.")
+			print("편차 점수 : " + str(symbol_std_le_plus[1]))
 			t = threading.Thread(target = winsound.Beep, args=(440, 500))
 			t.start()
 
+			symbol_std_le_plus = ['', -1]
 			return True
 	return False
 
@@ -432,7 +447,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
 			if premier_prix_achete > 0:
-				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.12
+				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.01
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
@@ -463,7 +478,7 @@ def obtenir_list_symbol():
 	except:
 		raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(1)")
 
-	for dr in dict_response1:
+	for dr in tqdm(dict_response1):
 		market = dr.get('market')
 		if(market[:3] == "KRW" and market[4:] not in list_symbol_interdit):
 			querystring = {"market" : market, "count" : "24"}
@@ -480,10 +495,12 @@ def obtenir_list_symbol():
 			for i in range(24):
 				acc_trade_price += dict_response2[i].get('candle_acc_trade_price')
 
-			if 0.04 < prix < 0.09 or 0.4 < prix < 0.9 or 4 < prix < 9 or \
-				40 < prix < 90 or 400 < prix < 900 or 3200 < prix:
+			if 0.04 < prix < 0.09 or 0.4 < prix < 0.9 or 4 < prix < 9 or 40 < prix < 90 or 400 < prix < 900 or 3200 < prix:
 				if acc_trade_price > 8000000000: #8,000백만
 					list_symbol.append(market[4:])
+
+	global DERNIER_SYMBOL
+	DERNIER_SYMBOL = list_symbol[-1]
 
 	print(list_symbol)
 	print("매수 기준에 충족하는 위 코인 목록을 모니터링합니다.")
