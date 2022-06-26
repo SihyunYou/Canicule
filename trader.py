@@ -63,7 +63,7 @@ def tailler(_prix, _taux):
 	return t
 
 
-class Diviser:
+class Acheter:
 	def __init__(self, _symbol, _prix_courant, _somme_totale):
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
@@ -87,6 +87,14 @@ class Diviser:
 		for n in range(1, _fois_decente + 1):
 			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
 			qn = a * pow(r, n - 1)
+			self.acheter(pn, qn)
+
+	def diviser_parabolique(self, _pourcent_descente, _fois_decente):
+		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
+		for n in range(1, _fois_decente + 1):
+			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			kn = (pow(n, 2) / 2) - (n / 2) + 1
+			qn = self.S * kn / s
 			self.acheter(pn, qn)
 
 	def diviser_lucas(self, _pourcent_descente, _fois_decente):
@@ -199,9 +207,12 @@ def obtenir_array_trade_price(_dict_response, _n): # 종가 리스트 구하기
 	return arr
 
 DERNIER_SYMBOL = ''
-def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매집
+def controler_achats(_symbol, _somme_totale): # 전부매집
 	global DUREE_MAXIMUM
-	querystring = {"market":"KRW-"+_symbol,"count":str(DUREE_MAXIMUM)}
+	querystring = {
+		"market" : "KRW-" + _symbol,
+		"count" : str(DUREE_MAXIMUM)
+		}
 
 	try:
 		response = requests.request("GET", URL_CANDLE, params=querystring)
@@ -217,7 +228,7 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 	global DERNIER_SYMBOL
 	global std_bas
 	if _symbol == DERNIER_SYMBOL:
-		if std_bas <= 0.01: 
+		if std_bas <= 0.012: 
 			std_bas += 0.002
 
 	if v.verfier_surete():
@@ -227,10 +238,11 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 
-			d = Diviser(_symbol, premier_prix_achete, _somme_totale)
-			d.diviser_lineaire(0.3333, 36, 1000000) # 선형 매집
-			#d.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			#d.diviser_lucas(0.34, 16) # 뤼카수열 매집
+			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
+			#a.diviser_lineaire(0.3333, 36, 1000000) # 선형 매집
+			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
+			a.diviser_parabolique(0.36, 28) # 포물선 매집(10.08%)
+			#a.diviser_lucas(0.34, 16) # 뤼카수열 매집
 			
 			std_bas = 0
 			print(_symbol + "매수 신청을 완료했습니다.")
@@ -239,6 +251,62 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 
 			return True
 	return False
+
+
+class Annuler:
+	def annuler_achats():
+		global uuid_achat
+
+		while(True):
+			try:
+				for p in uuid_achat:
+					self.annuler_commande(p)
+				uuid_achat.clear()
+				return
+			except:
+				print("오류 : 매수신청 취소에 실패했습니다.")
+				time.sleep(TEMPS_SLEEP)
+			
+	def annuler_vente():
+		global uuid_vente
+		
+		while(True):
+			try:
+				self.annuler_commande(uuid_vente)
+				uuid_vente = ""
+				return
+			except:
+				print("오류 : 매도신청 취소에 실패했습니다.")
+				time.sleep(TEMPS_SLEEP)
+
+	def annuler_commande(self, _uuid):
+		global CLE_ACCES
+		query = {
+			'uuid': _uuid,
+		}
+		query_string = urlencode(query).encode()
+
+		m = hashlib.sha512()
+		m.update(query_string)
+		query_hash = m.hexdigest()
+
+		payload = {
+			'access_key': CLE_ACCES,
+			'nonce': str(uuid.uuid4()),
+			'query_hash': query_hash,
+			'query_hash_alg': 'SHA512',
+		}
+
+		jwt_token = jwt.encode(payload, CLE_SECRET)
+		authorize_token = 'Bearer {}'.format(jwt_token)
+		headers = {"Authorization": authorize_token}
+
+		response = requests.delete(URL_SERVEUR + "/v1/order", params=query, headers=headers)
+		dict_response = json.loads(response.text)
+		#print(dict_response)
+			
+		time.sleep(TEMPS_SLEEP)
+		
 
 def examiner_compte():
 	payload = {
@@ -271,98 +339,20 @@ def examiner_symbol_compte(_symbol):
 			return balance, locked, avg_buy_price
 	return -1, -1, -1
 
-def annuler_ordre_achat():
-	global CLE_ACCES
-	global uuid_achat
-
-	while(True):
-		try:
-			for p in uuid_achat:
-				query = {
-					'uuid': p,
-				}
-				query_string = urlencode(query).encode()
-
-				m = hashlib.sha512()
-				m.update(query_string)
-				query_hash = m.hexdigest()
-
-				payload = {
-					'access_key': CLE_ACCES,
-					'nonce': str(uuid.uuid4()),
-					'query_hash': query_hash,
-					'query_hash_alg': 'SHA512',
-				}
-
-				jwt_token = jwt.encode(payload, CLE_SECRET)
-				authorize_token = 'Bearer {}'.format(jwt_token)
-				headers = {"Authorization": authorize_token}
-
-				response = requests.delete(URL_SERVEUR + "/v1/order", params=query, headers=headers)
-				dict_response = json.loads(response.text)
-				#print(dict_response)
-			
-				time.sleep(TEMPS_SLEEP)	
-
-			uuid_achat.clear()
-			return
-		except:
-			print("오류 : 매수신청 취소에 실패했습니다.")
-			time.sleep(TEMPS_SLEEP)
-
-def annuler_ordre_vente():
-	global CLE_ACCES
-	global uuid_vente
-
-	while(True):
-		try:
-			query = {
-				'uuid': uuid_vente,
-			}
-			query_string = urlencode(query).encode()
-
-			m = hashlib.sha512()
-			m.update(query_string)
-			query_hash = m.hexdigest()
-
-			payload = {
-				'access_key': CLE_ACCES,
-				'nonce': str(uuid.uuid4()),
-				'query_hash': query_hash,
-				'query_hash_alg': 'SHA512',
-			}
-
-			jwt_token = jwt.encode(payload, CLE_SECRET)
-			authorize_token = 'Bearer {}'.format(jwt_token)
-			headers = {"Authorization": authorize_token}
-
-			response = requests.delete(URL_SERVEUR + "/v1/order", params=query, headers=headers)
-			dict_response = json.loads(response.text)
-			#print(dict_response)
-
-			time.sleep(TEMPS_SLEEP)
-
-			uuid_vente = ""
-			return
-		except:
-			print("오류 : 매도신청 취소에 실패했습니다.")
-			time.sleep(TEMPS_SLEEP)
-		
-
-# flag_ordre_vendre는 매도주문이 걸려 있는지 여부에 대한 플래그
+# flag_commande_vendre는 매도주문이 걸려 있는지 여부에 대한 플래그
 PRIX_MINIMUM_VENDU = 10000 
-flag_ordre_vendre = False
+flag_commande_vendre = False
 count_montant_insuffissant = 0
 
-def est_ordre_vente_complete(_symbol):
-	global flag_ordre_vendre
+def est_commande_vente_complete(_symbol):
+	global flag_commande_vendre
 	global count_montant_insuffissant
 	dict_response = examiner_compte()
 
 	if(count_montant_insuffissant > 300):
 		print("잔여 매도요청이 체결되지 않아 매도를 취소합니다.")
 		count_montant_insuffissant = 0
-		flag_ordre_vendre = False
+		flag_commande_vendre = False
 		return True
 
 	for mon_dict in dict_response:
@@ -387,10 +377,10 @@ def est_ordre_vente_complete(_symbol):
 			else:
 				break
 
-	if(flag_ordre_vendre == False):
+	if(flag_commande_vendre == False):
 		return False
 	else:
-		flag_ordre_vendre = False
+		flag_commande_vendre = False
 		return True
 	
 def vendre_biens(_symbol, _volume, _prix):
@@ -428,8 +418,8 @@ def vendre_biens(_symbol, _volume, _prix):
 	#print(dict_response)
 	return dict_response
 
-def administrer_vente(_symbol, _somme_totale, _proportion_profit):
-	global flag_ordre_vendre
+def controler_vente(_symbol, _somme_totale, _proportion_profit):
+	global flag_commande_vendre
 	global count_montant_insuffissant
 
 	try:
@@ -443,7 +433,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 
 		if(balance > 0.00001 and montant > 5000):
 			if uuid_vente != "":
-				annuler_ordre_vente()
+				Annuler().annuler_vente()
 				time.sleep(TEMPS_SLEEP)
 
 			time.sleep(1)
@@ -459,7 +449,7 @@ def administrer_vente(_symbol, _somme_totale, _proportion_profit):
 				print("경고 : 최초 매수가의 값이 0입니다.")
 				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
 
-			flag_ordre_vendre = True
+			flag_commande_vendre = True
 			return True
 		elif(montant >= PRIX_MINIMUM_VENDU):
 			return True
@@ -510,7 +500,7 @@ def obtenir_list_symbol():
 
 	return list_symbol
 
-def obtenir_montant_KRW():
+def obtenir_solde_KRW():
 	for mon_dict in examiner_compte():
 		if mon_dict.get('currency') == "KRW":
 			return float(mon_dict.get('balance'))
@@ -531,13 +521,13 @@ if __name__=="__main__":
 		print("CLE_ACCES : " + CLE_ACCES)
 		print("CLE_SECRET : " + CLE_SECRET)
 
-	T_TIMEOUT = 40
+	T_TIMEOUT = 30
 
 	parser = argparse.ArgumentParser(description="J'EN SAIS RIEN.")
 	parser.add_argument('-s', type=int, required=False, help='-s : 투입할 총액. 미설정 시, 업비트에 있는 총 보유KRW이 투입됩니다.')
 	args = parser.parse_args()
 	
-	Sp = S = obtenir_montant_KRW()
+	Sp = S = obtenir_solde_KRW()
 	print("총 보유 KRW : " + format(int(S), ','))
 	
 	list_symbol = obtenir_list_symbol()
@@ -554,11 +544,11 @@ if __name__=="__main__":
 
 	while(True):
 		nom_symbol = ""
-		breakable, flag_ordre_vendre = False, False
+		breakable, flag_commande_vendre = False, False
 		fault = 0
 
-		while(True):
-			if(breakable): 
+		while True:
+			if breakable: 
 				break
 			
 			for symbol in list_symbol:
@@ -566,28 +556,28 @@ if __name__=="__main__":
 					break
 				animater("모니터링 중... ")
 					
-				if(acheter_si_prix_suffit_a_verification(symbol, S)):
+				if controler_achats(symbol, S):
 					nom_symbol = symbol
 					breakable = True
 				else:
 					time.sleep(0.055)
 		
-		while(True):
-			if(est_ordre_vente_complete(nom_symbol)):
+		while True:
+			if est_commande_vente_complete(nom_symbol):
 				print("매도 완료. 잔여 매수 요청을 취소합니다.")
 				break
-			elif(fault >= T_TIMEOUT):
+			elif fault >= T_TIMEOUT:
 				print("시간 초과.")
 				break
 
-			if(administrer_vente(nom_symbol, S, 0.3)):
+			if(controler_vente(nom_symbol, S, 0.3)):
 				fault = 0
 			else:
 				fault += 1
 
-		annuler_ordre_achat()
+		Annuler().annuler_achats()
 
 		TEMPS_FINAL = datetime.now()
-		S = int(obtenir_montant_KRW())
+		S = int(obtenir_solde_KRW())
 		print("평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(TEMPS_FINAL - TEMPS_INITIAL) + ')')
 		S = int(S * Commission)
