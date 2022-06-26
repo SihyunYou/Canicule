@@ -12,17 +12,21 @@ import argparse
 import numpy as np
 import threading
 from tqdm import tqdm
+import datetime
+from datetime import datetime
+from datetime import timedelta
 
 UNIT = 3
 DUREE_MAXIMUM = 120
 TEMPS_SLEEP = 0.21
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
-CLE_ACCES = ""
-CLE_SECRET = ""
+CLE_ACCES = ''
+CLE_SECRET = ''
 URL_SERVEUR = 'https://api.upbit.com'
+TEMPS_INITIAL = datetime.now()
 
 uuid_achat = []
-uuid_vente = ""
+uuid_vente = ''
 premier_prix_achete = 0
 
 def tailler(_prix, _taux):
@@ -210,24 +214,23 @@ def acheter_si_prix_suffit_a_verification(_symbol, _somme_totale): # 전부매�
 	#print("심볼 : " + _symbol)
 
 	v = Verifier(array_trade_price)
-	#if v.verifier_bb(20, 2):
-	#if v.verifier_tendance_positive():
-
 	global DERNIER_SYMBOL
 	global std_bas
 	if _symbol == DERNIER_SYMBOL:
-		if std_bas <= 0.016: 
+		if std_bas <= 0.01: 
 			std_bas += 0.002
 
 	if v.verfier_surete():
-		if v.verifier_std(20, 2): # 표준편차 이탈 관찰
+		#if v.verifier_bb(20, 2):
+		#if v.verifier_tendance_positive():
+		if v.verifier_std(20, 2):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 
 			d = Diviser(_symbol, premier_prix_achete, _somme_totale)
-			#d.diviser_lineaire(0.333, 36, 10000) # 선형 매집
-			d.diviser_exposant(0.38, 29, 1.19) # 지수 매집
-			#d.diviser_lucas(0.5, 16) # 뤼카수열 매집
+			d.diviser_lineaire(0.3333, 36, 1000000) # 선형 매집
+			#d.diviser_exposant(0.38, 29, 1.2) # 지수 매집
+			#d.diviser_lucas(0.34, 16) # 뤼카수열 매집
 			
 			std_bas = 0
 			print(_symbol + "매수 신청을 완료했습니다.")
@@ -584,6 +587,7 @@ if __name__=="__main__":
 
 		annuler_ordre_achat()
 
+		TEMPS_FINAL = datetime.now()
 		S = int(obtenir_montant_KRW())
-		print("평가손익 : " + '{0:+,}'.format(int(S - Sp)))
+		print("평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(TEMPS_FINAL - TEMPS_INITIAL) + ')')
 		S = int(S * Commission)
