@@ -18,7 +18,7 @@ from datetime import timedelta
 
 UNIT = 3
 DUREE_MAXIMUM = 20
-TEMPS_SLEEP = 0.21
+TEMPS_SLEEP = 0.205
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
 CLE_SECRET = ''
@@ -183,15 +183,16 @@ class Verifier:
 		return False
 
 	def verifier_std(self, _n, _z):
-		mm20 = np.mean(np.array(self.array_trade_price)[-20 : -1])
-		bb_bas = mm20 - np.std(np.array(self.array_trade_price)[-20 : -1]) * _z
+		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
+		bb_haut = mm20 + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
+		bb_bas = mm20 - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
 		longeur = 2 * np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
 		pourcent = longeur / self.prix_courant
 	
 		global std_bas
 		p = 0.036 - std_bas
 		q = 0.12
-		if(p < pourcent < q and self.prix_courant > bb_bas):
+		if p < pourcent < q and bb_bas < self.prix_courant < bb_haut:
 			print("표준편차 이탈 검출! : " + str(round(p, 3)))
 			return True
 		return False
@@ -232,17 +233,17 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			std_bas += 0.002
 
 	if v.verfier_surete():
-		if v.verifier_bb(20, 2):
+		#if v.verifier_bb(20, 2):
 		#if v.verifier_tendance_positive():
-		#if v.verifier_std(20, 2):
+		if v.verifier_std(20, 2):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
-			a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
+			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			#a.diviser_parabolique(0.36, 28) # 포물선 매집(10.08%)
-			#a.diviser_lucas(0.34, 16) # 뤼카수열 매집
+			a.diviser_parabolique(0.36, 28) # 포물선 매집(10.08%)
+			#a.diviser_lucas(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
 			print(_symbol + "매수 신청을 완료했습니다.")
