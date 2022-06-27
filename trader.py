@@ -17,7 +17,7 @@ from datetime import datetime
 from datetime import timedelta
 
 UNIT = 3
-DUREE_MAXIMUM = 120
+DUREE_MAXIMUM = 20
 TEMPS_SLEEP = 0.21
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -158,7 +158,7 @@ class Verifier:
 		bb_haut = bb_milieu + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
 		bb_bas = bb_milieu - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
 		C_MULTIPLICATION_LARGEUR_BANDE = 1.2
-		largeur_bande_minimum = prix_courant / 100 * C_MULTIPLICATION_LARGEUR_BANDE
+		largeur_bande_minimum = self.prix_courant / 100 * C_MULTIPLICATION_LARGEUR_BANDE
 
 		#print("최소 밴드폭 : " + str(largeur_bande_minimum))
 		#print("볼린저밴드 상단 : " + str(bb_haut))
@@ -232,16 +232,16 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			std_bas += 0.002
 
 	if v.verfier_surete():
-		#if v.verifier_bb(20, 2):
+		if v.verifier_bb(20, 2):
 		#if v.verifier_tendance_positive():
-		if v.verifier_std(20, 2):
+		#if v.verifier_std(20, 2):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
-			#a.diviser_lineaire(0.3333, 36, 1000000) # 선형 매집
+			a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			a.diviser_parabolique(0.36, 28) # 포물선 매집(10.08%)
+			#a.diviser_parabolique(0.36, 28) # 포물선 매집(10.08%)
 			#a.diviser_lucas(0.34, 16) # 뤼카수열 매집
 			
 			std_bas = 0
@@ -254,7 +254,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 
 
 class Annuler:
-	def annuler_achats():
+	def annuler_achats(self):
 		global uuid_achat
 
 		while(True):
@@ -267,7 +267,7 @@ class Annuler:
 				print("오류 : 매수신청 취소에 실패했습니다.")
 				time.sleep(TEMPS_SLEEP)
 			
-	def annuler_vente():
+	def annuler_vente(self):
 		global uuid_vente
 		
 		while(True):
@@ -340,7 +340,7 @@ def examiner_symbol_compte(_symbol):
 	return -1, -1, -1
 
 # flag_commande_vendre는 매도주문이 걸려 있는지 여부에 대한 플래그
-PRIX_MINIMUM_VENDU = 10000 
+PRIX_MINIMUM_VENDU = 5000
 flag_commande_vendre = False
 count_montant_insuffissant = 0
 
@@ -440,7 +440,7 @@ def controler_vente(_symbol, _somme_totale, _proportion_profit):
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
 			if premier_prix_achete > 0:
-				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1.01
+				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
@@ -521,7 +521,7 @@ if __name__=="__main__":
 		print("CLE_ACCES : " + CLE_ACCES)
 		print("CLE_SECRET : " + CLE_SECRET)
 
-	T_TIMEOUT = 30
+	T_TIMEOUT = 40
 
 	parser = argparse.ArgumentParser(description="J'EN SAIS RIEN.")
 	parser.add_argument('-s', type=int, required=False, help='-s : 투입할 총액. 미설정 시, 업비트에 있는 총 보유KRW이 투입됩니다.')
@@ -570,7 +570,7 @@ if __name__=="__main__":
 				print("시간 초과.")
 				break
 
-			if(controler_vente(nom_symbol, S, 0.3)):
+			if(controler_vente(nom_symbol, S, 0.32)):
 				fault = 0
 			else:
 				fault += 1
