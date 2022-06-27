@@ -192,7 +192,7 @@ class Verifier:
 		global std_bas
 		p = 0.036 - std_bas
 		q = 0.12
-		if p < pourcent < q and bb_bas < self.prix_courant < bb_haut:
+		if p < pourcent < q and self.prix_courant < bb_haut:
 			print("표준편차 이탈 검출! : " + str(round(p, 3)))
 			return True
 		return False
@@ -441,7 +441,8 @@ def controler_vente(_symbol, _somme_totale, _proportion_profit):
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
 			if premier_prix_achete > 0:
-				proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1
+				#proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1
+				proportion_supplement = 0
 				proportion_vente = _proportion_profit + proportion_supplement
 				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
@@ -571,7 +572,7 @@ if __name__=="__main__":
 				print("시간 초과.")
 				break
 
-			if(controler_vente(nom_symbol, S, 0.32)):
+			if(controler_vente(nom_symbol, S, 0.3)):
 				fault = 0
 			else:
 				fault += 1
