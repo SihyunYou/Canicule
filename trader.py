@@ -68,6 +68,7 @@ class Acheter:
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
 		self.S = _somme_totale
+		self.poids = 0.018
 
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
 		r = _fois_decente
@@ -75,7 +76,8 @@ class Acheter:
 		a = self.S / (r * ((r + 1) * h / 200 + 1))
 
 		for n in range(1, _fois_decente + 1):
-			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = a * h * n / 100 + a #투입 금액
 			self.acheter(pn, qn)
 
@@ -85,14 +87,16 @@ class Acheter:
 		a = self.S * (r - 1) / (pow(r, h) - 1)
 
 		for n in range(1, _fois_decente + 1):
-			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = a * pow(r, n - 1)
 			self.acheter(pn, qn)
 
 	def diviser_parabolique(self, _pourcent_descente, _fois_decente):
 		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
 		for n in range(1, _fois_decente + 1):
-			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
 			kn = (pow(n, 2) / 2) - (n / 2) + 1
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
@@ -102,7 +106,8 @@ class Acheter:
 		mon_lucas = lucas[:_fois_decente - 1]
 
 		for n in range(1, _fois_decente + 1):
-			pn = tailler(self.prix_courant, (n - 1) * _pourcent_descente)
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = self.S * lucas[n - 1] / sum(mon_lucas)
 			self.acheter(pn, qn) 
 
@@ -184,9 +189,9 @@ class Verifier:
 
 	def verifier_std(self, _n, _z):
 		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_haut = mm20 + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
-		bb_bas = mm20 - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
-		longeur = 2 * np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
+		bb_haut = mm20 + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * 1
+		bb_bas = mm20 - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * 2
+		longeur = 2 * np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * 2
 		pourcent = longeur / self.prix_courant
 	
 		global std_bas
@@ -242,7 +247,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			a.diviser_parabolique(0.36, 28) # 포물선 매집(10.08%)
+			a.diviser_parabolique(0.35, 28) # 포물선 매집(14%)
 			#a.diviser_lucas(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
