@@ -18,12 +18,13 @@ from datetime import timedelta
 
 UNIT = 3
 DUREE_MAXIMUM = 20
-TEMPS_SLEEP = 0.205
+TEMPS_SLEEP = 0.2
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
 CLE_SECRET = ''
 URL_SERVEUR = 'https://api.upbit.com'
 TEMPS_INITIAL = datetime.now()
+TEMPS_REINITIAL = TEMPS_INITIAL
 
 uuid_achat = []
 uuid_vente = ''
@@ -522,24 +523,15 @@ def animater(s):
 
 
 if __name__=="__main__":
-	with open("key.txt", 'r') as f:
-		CLE_ACCES = f.readline().strip()
-		CLE_SECRET = f.readline().strip()
-		print("CLE_ACCES : " + CLE_ACCES)
-		print("CLE_SECRET : " + CLE_SECRET)
-
-	T_TIMEOUT = 40
-
 	parser = argparse.ArgumentParser(description="J'EN SAIS RIEN.")
 	parser.add_argument('-s', type=int, required=False, help='-s : 투입할 총액. 미설정 시, 업비트에 있는 총 보유KRW이 투입됩니다.')
 	args = parser.parse_args()
 	
+	T_TIMEOUT = 30
+	Commission = 0.9995
 	Sp = S = obtenir_solde_KRW()
 	print("총 보유 KRW : " + format(int(S), ','))
-	
-	list_symbol = obtenir_list_symbol()
 
-	Commission = 0.9995
 	if(args.s is not None):
 		if(args.s < 5000000):
 			print("5,000,000원 이상을 입력해야 합니다.")
@@ -549,42 +541,52 @@ if __name__=="__main__":
 	else:
 		S = int(S * Commission)
 
-	while(True):
-		nom_symbol = ""
-		breakable, flag_commande_vendre = False, False
-		fault = 0
+	while True:
+		with open("key.txt", 'r') as f:
+			CLE_ACCES = f.readline().strip()
+			CLE_SECRET = f.readline().strip()
+			print("CLE_ACCES : " + CLE_ACCES)
+			print("CLE_SECRET : " + CLE_SECRET)
+		list_symbol = obtenir_list_symbol()
 
-		while True:
-			if breakable: 
-				break
-			
-			for symbol in list_symbol:
-				if(breakable): 
+		while TEMPS_REINITIAL - datetime.now() < datetime.timedelta(hours = 8):
+			nom_symbol = ""
+			breakable, flag_commande_vendre = False, False
+			fault = 0
+
+			while True:
+				if breakable: 
 					break
-				animater("모니터링 중... ")
+			
+				for symbol in list_symbol:
+					if(breakable): 
+						break
+					animater("모니터링 중... ")
 					
-				if controler_achats(symbol, S):
-					nom_symbol = symbol
-					breakable = True
-				else:
-					time.sleep(0.055)
+					if controler_achats(symbol, S):
+						nom_symbol = symbol
+						breakable = True
+					else:
+						time.sleep(0.055)
 		
-		while True:
-			if est_commande_vente_complete(nom_symbol):
-				print("매도 완료. 잔여 매수 요청을 취소합니다.")
-				break
-			elif fault >= T_TIMEOUT:
-				print("시간 초과.")
-				break
+			while True:
+				if est_commande_vente_complete(nom_symbol):
+					print("매도 완료. 잔여 매수 요청을 취소합니다.")
+					break
+				elif fault >= T_TIMEOUT:
+					print("시간 초과.")
+					break
 
-			if(controler_vente(nom_symbol, S, 0.3)):
-				fault = 0
-			else:
-				fault += 1
+				if(controler_vente(nom_symbol, S, 0.3)):
+					fault = 0
+				else:
+					fault += 1
+			Annuler().annuler_achats()
 
-		Annuler().annuler_achats()
+			TEMPS_FINAL = datetime.now()
+			temps_passe = str((TEMPS_FINAL - TEMPS_INITIAL).strftime('%H:%M:%S'))
+			S = int(obtenir_solde_KRW())
+			print("평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(TEMPS_FINAL) + ', ' + temps_passe + ')')
+			S = int(S * Commission)
 
-		TEMPS_FINAL = datetime.now()
-		S = int(obtenir_solde_KRW())
-		print("평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(TEMPS_FINAL - TEMPS_INITIAL) + ')')
-		S = int(S * Commission)
+		TEMPS_REINITIAL = datetime.now()
