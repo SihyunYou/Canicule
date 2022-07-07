@@ -15,7 +15,7 @@ profitabilite_minute = []
 k = 0
 commission = 0.15
 
-f = open('profit_2022_6.txt', 'r', encoding='UTF-8')
+f = open('profit_2022_7.txt', 'r', encoding='UTF-8')
 _lines = f.readlines()
 lines = []
 i = 0
