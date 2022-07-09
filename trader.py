@@ -18,7 +18,7 @@ from datetime import timedelta
 
 UNIT = 3
 DUREE_MAXIMUM = 20 # >= 20
-TEMPS_SLEEP = 0.17
+TEMPS_SLEEP = 0.165
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
 CLE_SECRET = ''
@@ -196,14 +196,14 @@ class Verifier:
 
 	def verifier_std(self, _n, _z):
 		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_haut = mm20 + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * 1
-		bb_bas = mm20 - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * 2
-		longeur = 2 * np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * 2
+		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
+		bb_haut = mm20 + bb_std * 1.28 # z note 80%
+		longeur = bb_std * 4
 		pourcent = longeur / self.prix_courant
 	
 		global std_bas
 		p = 0.04 - std_bas
-		q = 0.16
+		q = 0.2
 		if p < pourcent < q and self.prix_courant < bb_haut:
 			print("표준편차 이탈 검출! : " + str(round(p, 3)))
 			return True
@@ -242,7 +242,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 	global DERNIER_SYMBOL
 	global std_bas
 	if _symbol == DERNIER_SYMBOL:
-		if std_bas <= 0.01: 
+		if std_bas < 0.01: 
 			std_bas += 0.002
 
 	global premier_prix_achete
@@ -584,7 +584,7 @@ if __name__=="__main__":
 						nom_symbol = symbol
 						breakable = True
 					else:
-						time.sleep(0.051)
+						time.sleep(0.0505)
 
 			list_symbol.remove(nom_symbol)
 			list_symbol.insert(0, nom_symbol)
