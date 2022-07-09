@@ -17,8 +17,8 @@ from datetime import datetime
 from datetime import timedelta
 
 UNIT = 3
-DUREE_MAXIMUM = 20
-TEMPS_SLEEP = 0.195
+DUREE_MAXIMUM = 20 # >= 20
+TEMPS_SLEEP = 0.17
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
 CLE_SECRET = ''
@@ -61,7 +61,6 @@ def tailler(_prix, _taux):
 		t -= t % 1000
 
 	return t
-
 
 class Acheter:
 	def __init__(self, _symbol, _prix_courant, _somme_totale):
@@ -151,6 +150,7 @@ class Verifier:
 		self.prix_courant = _array_trade_price[-1]
 		self.array_trade_price = _array_trade_price
 
+	### Premiere verification ###
 	def verfier_surete(self): # 동적 보호매수
 		p = self.array_trade_price[-20]
 		q = self.array_trade_price[-1]
@@ -158,6 +158,13 @@ class Verifier:
 			return True
 		return False
 
+	def verifier_prix(self, _prix):
+		if 0.036 < _prix < 0.0995 or 0.36 < _prix < 0.995 or 3.6 < _prix < 9.95 or \
+				36 < _prix < 99.5 or 360 < _prix < 995 or 3200 < _prix:
+			return True
+		return False
+
+	### Deuxieme verification ###
 	def verifier_bb(self, _n, _z):
 		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
 		bb_haut = bb_milieu + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
@@ -195,7 +202,7 @@ class Verifier:
 		pourcent = longeur / self.prix_courant
 	
 		global std_bas
-		p = 0.036 - std_bas
+		p = 0.04 - std_bas
 		q = 0.16
 		if p < pourcent < q and self.prix_courant < bb_haut:
 			print("표준편차 이탈 검출! : " + str(round(p, 3)))
@@ -226,6 +233,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 
 		array_trade_price = obtenir_array_trade_price(dict_response, DUREE_MAXIMUM)
 	except:
+		print("예외 : 가격 정보 반환에 실패하였습니다.")
 		return False
 	
 	#print("심볼 : " + _symbol)
@@ -234,20 +242,20 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 	global DERNIER_SYMBOL
 	global std_bas
 	if _symbol == DERNIER_SYMBOL:
-		if std_bas <= 0.012: 
+		if std_bas <= 0.01: 
 			std_bas += 0.002
 
-	if v.verfier_surete():
+	global premier_prix_achete
+	premier_prix_achete = obtenir_prix_courant(dict_response)
+
+	if v.verfier_surete() and v.verifier_prix(premier_prix_achete):
 		#if v.verifier_bb(20, 2):
 		#if v.verifier_tendance_positive():
 		if v.verifier_std(20, 2):
-			global premier_prix_achete
-			premier_prix_achete = obtenir_prix_courant(dict_response)
-
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			a.diviser_parabolique(0.35, 27) # 포물선 매집(14%)
+			a.diviser_parabolique(0.3333, 26) # 포물선 매집(14%)
 			#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
@@ -480,24 +488,25 @@ def obtenir_list_symbol():
 
 	for dr in tqdm(dict_response1):
 		market = dr.get('market')
+		comte = 60
 		if(market[:3] == "KRW" and market[4:] not in list_symbol_interdit):
-			querystring = {"market" : market, "count" : "24"}
+			querystring = {"market" : market, "count" : str(comte)} # 3시간 기준
 
 			try:
-				response = requests.request("GET", "https://api.upbit.com/v1/candles/minutes/60", params=querystring)
-				time.sleep(0.055)
+				response = requests.request("GET", URL_CANDLE, params=querystring)
+				time.sleep(0.053)
 				dict_response2 = json.loads(response.text)
 			except:
 				raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(2)")
 
 			prix = obtenir_prix_courant(dict_response2)
 			acc_trade_price = 0
-			for i in range(24):
+			for i in range(comte):
 				acc_trade_price += dict_response2[i].get('candle_acc_trade_price')
 
-			if 0.04 < prix < 0.09 or 0.4 < prix < 0.9 or 4 < prix < 9 or \
-				40 < prix < 90 or 400 < prix < 900 or 3200 < prix:
-				if acc_trade_price > 1000000000: #1,000백만
+			if 0.036 < prix < 0.096 or 0.36 < prix < 0.96 or 3.6 < prix < 9.6 or \
+				36 < prix < 96 or 360 < prix < 960 or 3200 < prix:
+				if acc_trade_price > 800000000: #800백만
 					list_symbol.append(market[4:])
 
 	global DERNIER_SYMBOL
@@ -529,6 +538,7 @@ if __name__=="__main__":
 		print("CLE_SECRET : " + CLE_SECRET)
 
 	T_TIMEOUT = 30
+	TEMPS_REINITIAL = datetime.now()
 	parser = argparse.ArgumentParser(description="J'EN SAIS RIEN.")
 	parser.add_argument('-s', type=int, required=False, help='-s : 투입할 총액. 미설정 시, 업비트에 있는 총 보유KRW이 투입됩니다.')
 	args = parser.parse_args()
@@ -547,46 +557,54 @@ if __name__=="__main__":
 	else:
 		S = int(S * Commission)
 
+	nom_symbol = ''
 	while True:
-		nom_symbol = ""
-		breakable, flag_commande_vendre = False, False
-		fault = 0
+		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 3): 
+			TEMPS_REINITIAL = datetime.now()
+			list_symbol = obtenir_list_symbol()
 
-		while True:
-			if breakable: 
-				break
-			
-			for symbol in list_symbol:
+			if nom_symbol != '':
+				list_symbol.remove(nom_symbol)
+				list_symbol.insert(0, nom_symbol)
+				DERNIER_SYMBOL = list_symbol[-1]
+		else:
+			breakable, flag_commande_vendre = False, False
+			fault = 0
+
+			while True:
 				if breakable: 
 					break
-				animater("모니터링 중... ")
+			
+				for symbol in list_symbol:
+					if breakable: 
+						break
+					animater("모니터링 중... ")
 					
-				if controler_achats(symbol, S):
-					nom_symbol = symbol
-					breakable = True
+					if controler_achats(symbol, S):
+						nom_symbol = symbol
+						breakable = True
+					else:
+						time.sleep(0.051)
+
+			list_symbol.remove(nom_symbol)
+			list_symbol.insert(0, nom_symbol)
+			DERNIER_SYMBOL = list_symbol[-1]
+
+			while True:
+				if est_commande_vente_complete(nom_symbol):
+					print("매도 완료. 잔여 매수 요청을 취소합니다.")
+					break
+				elif fault >= T_TIMEOUT:
+					print("시간 초과.")
+					break
+
+				if(controler_vente(nom_symbol, S, 0.3)):
+					fault = 0
 				else:
-					time.sleep(0.053)
-		
-		list_symbol.remove(nom_symbol)
-		list_symbol.insert(0, nom_symbol)
-		DERNIER_SYMBOL = list_symbol[-1]
+					fault += 1
 
-		while True:
-			if est_commande_vente_complete(nom_symbol):
-				print("매도 완료. 잔여 매수 요청을 취소합니다.")
-				break
-			elif fault >= T_TIMEOUT:
-				print("시간 초과.")
-				break
+			Annuler().annuler_achats()
 
-			if(controler_vente(nom_symbol, S, 0.3)):
-				fault = 0
-			else:
-				fault += 1
-
-		Annuler().annuler_achats()
-
-		TEMPS_FINAL = datetime.now()
-		S = int(obtenir_solde_KRW())
-		print("평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(TEMPS_FINAL - TEMPS_INITIAL) + ')')
-		S = int(S * Commission)
+			S = int(obtenir_solde_KRW())
+			print("평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
+			S = int(S * Commission)
