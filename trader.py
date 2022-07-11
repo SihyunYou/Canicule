@@ -15,10 +15,14 @@ from tqdm import tqdm
 import datetime
 from datetime import datetime
 from datetime import timedelta
+from colorama import Fore, Back, Style
+
+colorama.init(autoreset = True)
 
 UNIT = 3
 DUREE_MAXIMUM = 20 # >= 20
-TEMPS_SLEEP = 0.165
+TEMPS_DORMIR = 0.17
+TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
 CLE_SECRET = ''
@@ -28,6 +32,18 @@ TEMPS_INITIAL = datetime.now()
 uuid_achat = []
 uuid_vente = ''
 premier_prix_achete = 0
+
+class Niveau:
+	GENERAL = Fore.LIGHTWHITE_EX + Style.BRIGHT
+	SUCCES = Fore.LIGHTWHITE_EX + Back.LIGHTCYAN_EX + Style.BRIGHT
+	FAULT = Fore.LIGHTWHITE_EX + Back.LIGHTRED_EX + Style.BRIGHT
+	AVERTISSEMENT = Fore.LIGHTWHITE_EX + Back.LIGHTMAGENTA_EX + Style.BRIGHT
+	EXCEPTION = Fore.LIGHTWHITE_EX + Back.LIGHTYELLOW_EX + Style.BRIGHT
+
+def imprimer(_niveau, _s):
+	niveau_datetime = Fore.LIGHTWHITE_EX + Style.BRIGHT
+	print(niveau_datetime + '[' + datetime.now().strftime('%x %X') + '] ' + \
+		_niveau + _s)
 
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
@@ -141,7 +157,7 @@ class Acheter:
 		uuid_achat.append(dict_response.get('uuid'))
 
 		#print(response.text)
-		time.sleep(TEMPS_SLEEP)
+		time.sleep(TEMPS_DORMIR)
 
 
 std_bas = 0
@@ -205,7 +221,7 @@ class Verifier:
 		p = 0.04 - std_bas
 		q = 0.2
 		if p < pourcent < q and self.prix_courant < bb_haut:
-			print("표준편차 이탈 검출! : " + str(round(p, 3)))
+			imprimer(Niveau.GENERAL + "표준편차 이탈 검출! : " + str(round(p, 3)))
 			return True
 		return False
 
@@ -233,7 +249,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 
 		array_trade_price = obtenir_array_trade_price(dict_response, DUREE_MAXIMUM)
 	except:
-		print("예외 : 가격 정보 반환에 실패하였습니다.")
+		imprimer(Niveau.EXCEPTION + "가격 정보 반환에 실패하였습니다.")
 		return False
 	
 	#print("심볼 : " + _symbol)
@@ -259,7 +275,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
-			print(_symbol + "매수 신청을 완료했습니다.")
+			imprimer(Niveau.GENERAL, _symbol + "매수 신청을 완료했습니다.")
 			t = threading.Thread(target = winsound.Beep, args=(440, 500))
 			t.start()
 
@@ -271,27 +287,27 @@ class Annuler:
 	def annuler_achats(self):
 		global uuid_achat
 
-		while(True):
+		while True:
 			try:
 				for p in uuid_achat:
 					self.annuler_commande(p)
 				uuid_achat.clear()
 				return
 			except:
-				print("오류 : 매수신청 취소에 실패했습니다.")
-				time.sleep(TEMPS_SLEEP)
+				imprimer(Niveau.EXCEPTION, "매수신청 취소에 실패했습니다.")
+				time.sleep(TEMPS_EXCEPTION)
 			
 	def annuler_vente(self):
 		global uuid_vente
 		
-		while(True):
+		while True:
 			try:
 				self.annuler_commande(uuid_vente)
-				uuid_vente = ""
+				uuid_vente = ''
 				return
 			except:
-				print("오류 : 매도신청 취소에 실패했습니다.")
-				time.sleep(TEMPS_SLEEP)
+				imprimer(Niveau.EXCEPTION, "취소에 실패했습니다.")
+				time.sleep(TEMPS_EXCEPTION)
 
 	def annuler_commande(self, _uuid):
 		global CLE_ACCES
@@ -319,7 +335,7 @@ class Annuler:
 		dict_response = json.loads(response.text)
 		#print(dict_response)
 			
-		time.sleep(TEMPS_SLEEP)
+		time.sleep(TEMPS_DORMIR)
 		
 
 def examiner_compte():
@@ -336,12 +352,12 @@ def examiner_compte():
 		try:
 			response = requests.get(URL_SERVEUR + "/v1/accounts", headers=headers)
 			dict_response = json.loads(response.text)
-			time.sleep(TEMPS_SLEEP)
+			time.sleep(TEMPS_DORMIR)
 
 			#print(dict_response)
 			return dict_response
 		except:
-			time.sleep(TEMPS_SLEEP)
+			time.sleep(TEMPS_DORMIR)
 
 def examiner_symbol_compte(_symbol):
 	for mon_dict in examiner_compte():
@@ -364,7 +380,7 @@ def est_commande_vente_complete(_symbol):
 	dict_response = examiner_compte()
 
 	if(count_montant_insuffissant > 300):
-		print("잔여 매도요청이 체결되지 않아 매도를 취소합니다.")
+		imprimer(Niveau.AVERTISSEMENT, "잔여 매도요청이 체결되지 않아 매도를 취소합니다.")
 		count_montant_insuffissant = 0
 		flag_commande_vendre = False
 		return True
@@ -377,7 +393,7 @@ def est_commande_vente_complete(_symbol):
 			avg_buy_price = float(mon_dict.get('avg_buy_price'))
 			montant = (balance + locked) * avg_buy_price
 		except:
-			time.sleep(TEMPS_SLEEP)
+			time.sleep(TEMPS_DORMIR)
 			return False
 
 		if currency == _symbol:
@@ -424,7 +440,7 @@ def vendre_biens(_symbol, _volume, _prix):
 
 	response = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
 	dict_response = json.loads(response.text)
-	time.sleep(TEMPS_SLEEP)
+	time.sleep(TEMPS_DORMIR)
 
 	global uuid_vente
 	uuid_vente = dict_response.get('uuid')
@@ -448,7 +464,7 @@ def controler_vente(_symbol, _somme_totale, _proportion_profit):
 		if(balance > 0.00001 and montant > 5000):
 			if uuid_vente != "":
 				Annuler().annuler_vente()
-				time.sleep(TEMPS_SLEEP)
+				time.sleep(TEMPS_DORMIR)
 
 			time.sleep(1)
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
@@ -457,11 +473,11 @@ def controler_vente(_symbol, _somme_totale, _proportion_profit):
 				#proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1
 				proportion_supplement = 0
 				proportion_vente = _proportion_profit + proportion_supplement
-				print("매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
+				imprimer(Niveau.GENERAL, "매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
 
 				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * proportion_vente))
 			else:
-				print("경고 : 최초 매수가의 값이 0입니다.")
+				imprimer(Niveau.AVERTISSEMENT,  "최초 매수가의 값이 0입니다.")
 				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
 
 			flag_commande_vendre = True
@@ -494,7 +510,7 @@ def obtenir_list_symbol():
 
 			try:
 				response = requests.request("GET", URL_CANDLE, params=querystring)
-				time.sleep(0.053)
+				time.sleep(0.054)
 				dict_response2 = json.loads(response.text)
 			except:
 				raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(2)")
@@ -506,13 +522,13 @@ def obtenir_list_symbol():
 
 			if 0.036 < prix < 0.096 or 0.36 < prix < 0.96 or 3.6 < prix < 9.6 or \
 				36 < prix < 96 or 360 < prix < 960 or 3200 < prix:
-				if acc_trade_price > 800000000: #800백만
+				if acc_trade_price > 250000000: #250백만
 					list_symbol.append(market[4:])
 
 	global DERNIER_SYMBOL
 	DERNIER_SYMBOL = list_symbol[-1]
-	print(list_symbol)
-	print("매수 기준에 충족하는 위 코인 목록을 모니터링합니다.")
+	imprimer(Niveau.GENERAL, '[' + ', '.join(list_symbol) + ']')
+	imprimer(Niveau.GENERAL, "매수 기준에 충족하는 위 코인 목록을 모니터링합니다.")
 
 	return list_symbol
 
@@ -544,7 +560,7 @@ if __name__=="__main__":
 	args = parser.parse_args()
 	
 	Sp = S = obtenir_solde_KRW()
-	print("총 보유 KRW : " + format(int(S), ','))
+	imprimer(Niveau.GENERAL, "총 보유 KRW : " + format(int(S), ','))
 	list_symbol = obtenir_list_symbol()
 
 	Commission = 0.9995
@@ -584,7 +600,7 @@ if __name__=="__main__":
 						nom_symbol = symbol
 						breakable = True
 					else:
-						time.sleep(0.0505)
+						time.sleep(0.0515)
 
 			list_symbol.remove(nom_symbol)
 			list_symbol.insert(0, nom_symbol)
@@ -592,13 +608,13 @@ if __name__=="__main__":
 
 			while True:
 				if est_commande_vente_complete(nom_symbol):
-					print("매도 완료. 잔여 매수 요청을 취소합니다.")
+					imprimer(Niveau.SUCCES, "매도 완료. 잔여 매수 요청을 취소합니다.")
 					break
 				elif fault >= T_TIMEOUT:
-					print("시간 초과.")
+					imprimer(Niveau.FAULT, "시간 초과.")
 					break
 
-				if(controler_vente(nom_symbol, S, 0.3)):
+				if controler_vente(nom_symbol, S, 0.3):
 					fault = 0
 				else:
 					fault += 1
@@ -606,5 +622,6 @@ if __name__=="__main__":
 			Annuler().annuler_achats()
 
 			S = int(obtenir_solde_KRW())
-			print("평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
+			interet = "평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')'
+			imprimer(Niveau.GENERAL, interet)
 			S = int(S * Commission)
