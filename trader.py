@@ -169,16 +169,25 @@ class Verifier:
 	### Premiere verification ###
 	def verfier_surete(self): # 동적 보호매수
 		p = self.array_trade_price[-20]
-		q = self.array_trade_price[-1]
+		q = self.prix_courant
 		if - 0.1 < (q - p) / self.prix_courant < 0.25:
 			return True
 		return False
 
-	def verifier_prix(self, _prix):
-		if 0.036 < _prix < 0.0995 or 0.36 < _prix < 0.995 or 3.6 < _prix < 9.95 or \
-				36 < _prix < 99.5 or 360 < _prix < 995 or 3200 < _prix:
+	def verifier_prix(self):
+		if 0.036 < self.prix_courant < 0.0995 or 0.36 < self.prix_courant < 0.995 or 3.6 < self.prix_courant < 9.95 or \
+				36 < self.prix_courant < 99.5 or 360 < self.prix_courant < 995 or 3200 < self.prix_courant:
 			return True
 		return False
+
+	def verifier_tendance_non_negatif(self):
+		mm20 = np.mean(np.array(self.array_trade_price)[-20 : -1])
+		mm60 = np.mean(np.array(self.array_trade_price)[-60 : -1])
+		mm120 = np.mean(np.array(self.array_trade_price)[-120 : -1])
+
+		if mm20 <= mm60 <= mm120:
+			return False
+		return True
 
 	### Deuxieme verification ###
 	def verifier_bb(self, _n, _z):
@@ -261,13 +270,10 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 		if std_bas < 0.01: 
 			std_bas += 0.002
 
-	global premier_prix_achete
-	premier_prix_achete = obtenir_prix_courant(dict_response)
-
-	if v.verfier_surete() and v.verifier_prix(premier_prix_achete):
-		#if v.verifier_bb(20, 2):
-		#if v.verifier_tendance_positive():
+	if v.verfier_surete() and v.verifier_prix() and v.verifier_tendance_non_negatif():
 		if v.verifier_std(20, 2):
+			global premier_prix_achete
+			premier_prix_achete = obtenir_prix_courant(dict_response)
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
