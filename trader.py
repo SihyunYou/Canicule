@@ -15,13 +15,13 @@ from tqdm import tqdm
 import datetime
 from datetime import datetime
 from datetime import timedelta
-from colorama import Fore, Back, Style
+from colorama import init, Fore, Back, Style
 
-colorama.init(autoreset = True)
+init(autoreset = True)
 
 UNIT = 3
 DUREE_MAXIMUM = 20 # >= 20
-TEMPS_DORMIR = 0.17
+TEMPS_DORMIR = 0.18
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -34,15 +34,15 @@ uuid_vente = ''
 premier_prix_achete = 0
 
 class Niveau:
-	GENERAL = Fore.LIGHTWHITE_EX + Style.BRIGHT
+	INFORMATION = Fore.GREEN + Style.BRIGHT
 	SUCCES = Fore.LIGHTWHITE_EX + Back.LIGHTCYAN_EX + Style.BRIGHT
-	FAULT = Fore.LIGHTWHITE_EX + Back.LIGHTRED_EX + Style.BRIGHT
 	AVERTISSEMENT = Fore.LIGHTWHITE_EX + Back.LIGHTMAGENTA_EX + Style.BRIGHT
-	EXCEPTION = Fore.LIGHTWHITE_EX + Back.LIGHTYELLOW_EX + Style.BRIGHT
+	EXCEPTION = Fore.LIGHTYELLOW_EX + Style.BRIGHT
+	ERREUR = Fore.LIGHTWHITE_EX + Back.LIGHTRED_EX + Style.BRIGHT
 
 def imprimer(_niveau, _s):
-	niveau_datetime = Fore.LIGHTWHITE_EX + Style.BRIGHT
-	print(niveau_datetime + '[' + datetime.now().strftime('%x %X') + '] ' + \
+	niveau_datetime = Fore.MAGENTA + Style.NORMAL
+	print(niveau_datetime + '[' + datetime.now().strftime('%m/%d %X') + '] ' + \
 		_niveau + _s)
 
 def tailler(_prix, _taux):
@@ -83,7 +83,7 @@ class Acheter:
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
 		self.S = _somme_totale
-		self.poids = 0.018
+		self.poids = 0.02
 
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
 		r = _fois_decente
@@ -93,7 +93,7 @@ class Acheter:
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = a * h * n / 100 + a #투입 금액
+			qn = a * h * n / 100 + a
 			self.acheter(pn, qn)
 
 	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant):
@@ -194,7 +194,7 @@ class Verifier:
 	
 		if(bb_haut - bb_bas > largeur_bande_minimum):
 			if self.prix_courant < bb_bas:
-				print("볼밴이탈 검출!")
+				print("Hors de bb !")
 				return True
 		return False
 
@@ -206,7 +206,7 @@ class Verifier:
 		if(mm20 > mm60 > mm120):
 			if self.prix_courant * 0.04 > mm20 - mm60 > 0 and \
 				self.prix_courant > mm60 * 1.01:
-				print("우상향 차트 검출!")
+				print("Graphique dont la tendance est positive !")
 				return True
 		return False
 
@@ -221,7 +221,7 @@ class Verifier:
 		p = 0.04 - std_bas
 		q = 0.2
 		if p < pourcent < q and self.prix_courant < bb_haut:
-			imprimer(Niveau.GENERAL + "표준편차 이탈 검출! : " + str(round(p, 3)))
+			imprimer(Niveau.INFORMATION, "Hors de la deviation normale ! : " + str(round(p, 3)))
 			return True
 		return False
 
@@ -249,7 +249,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 
 		array_trade_price = obtenir_array_trade_price(dict_response, DUREE_MAXIMUM)
 	except:
-		imprimer(Niveau.EXCEPTION + "가격 정보 반환에 실패하였습니다.")
+		imprimer(Niveau.EXCEPTION + "Rate de recuperer les donnes de prix.")
 		return False
 	
 	#print("심볼 : " + _symbol)
@@ -271,11 +271,11 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			a.diviser_parabolique(0.3333, 26) # 포물선 매집(14%)
+			a.diviser_parabolique(0.3333, 27) # 포물선 매집(14%)
 			#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
-			imprimer(Niveau.GENERAL, _symbol + "매수 신청을 완료했습니다.")
+			imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + _symbol + '\'')
 			t = threading.Thread(target = winsound.Beep, args=(440, 500))
 			t.start()
 
@@ -294,7 +294,7 @@ class Annuler:
 				uuid_achat.clear()
 				return
 			except:
-				imprimer(Niveau.EXCEPTION, "매수신청 취소에 실패했습니다.")
+				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande d'achat.")
 				time.sleep(TEMPS_EXCEPTION)
 			
 	def annuler_vente(self):
@@ -306,7 +306,7 @@ class Annuler:
 				uuid_vente = ''
 				return
 			except:
-				imprimer(Niveau.EXCEPTION, "취소에 실패했습니다.")
+				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande de vente.")
 				time.sleep(TEMPS_EXCEPTION)
 
 	def annuler_commande(self, _uuid):
@@ -380,7 +380,7 @@ def est_commande_vente_complete(_symbol):
 	dict_response = examiner_compte()
 
 	if(count_montant_insuffissant > 300):
-		imprimer(Niveau.AVERTISSEMENT, "잔여 매도요청이 체결되지 않아 매도를 취소합니다.")
+		imprimer(Niveau.AVERTISSEMENT, "Annuler le vente car le reste de demande de vente n'est pas conclu.")
 		count_montant_insuffissant = 0
 		flag_commande_vendre = False
 		return True
@@ -466,18 +466,17 @@ def controler_vente(_symbol, _somme_totale, _proportion_profit):
 				Annuler().annuler_vente()
 				time.sleep(TEMPS_DORMIR)
 
-			time.sleep(1)
+			time.sleep(TEMPS_DORMIR)
 			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
 			if premier_prix_achete > 0:
 				#proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1
 				proportion_supplement = 0
 				proportion_vente = _proportion_profit + proportion_supplement
-				imprimer(Niveau.GENERAL, "매수평균가 : " + str(avg_buy_price) + "(매도점 : +" + str(round(proportion_vente, 3)) + "%)" )
-
+				imprimer(Niveau.INFORMATION, "prix de moyenne d'acaht : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * proportion_vente)))
 				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * proportion_vente))
 			else:
-				imprimer(Niveau.AVERTISSEMENT,  "최초 매수가의 값이 0입니다.")
+				imprimer(Niveau.AVERTISSEMENT,  "Le premier prix d'achat est 0.")
 				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
 
 			flag_commande_vendre = True
@@ -500,9 +499,10 @@ def obtenir_list_symbol():
 		response = requests.request("GET", "https://api.upbit.com/v1/market/all?isDetails=false", headers=headers)
 		dict_response1 = json.loads(response.text)
 	except:
-		raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(1)")
+		imprimer(Niveau.ERREUR, "Rate de recuperer la liste de symbols. (1)")
+		raise Exception('')
 
-	for dr in tqdm(dict_response1):
+	for dr in tqdm(dict_response1, desc = 'Initialisation'):
 		market = dr.get('market')
 		comte = 60
 		if(market[:3] == "KRW" and market[4:] not in list_symbol_interdit):
@@ -513,7 +513,8 @@ def obtenir_list_symbol():
 				time.sleep(0.054)
 				dict_response2 = json.loads(response.text)
 			except:
-				raise Exception("오류 : 심볼 리스트를 받아오는데 실패하였습니다.(2)")
+				imprimer(Niveau.ERREUR, "Rate de recuperer la liste de symbols. (2)")
+				raise Exception('')
 
 			prix = obtenir_prix_courant(dict_response2)
 			acc_trade_price = 0
@@ -522,13 +523,14 @@ def obtenir_list_symbol():
 
 			if 0.036 < prix < 0.096 or 0.36 < prix < 0.96 or 3.6 < prix < 9.6 or \
 				36 < prix < 96 or 360 < prix < 960 or 3200 < prix:
-				if acc_trade_price > 250000000: #250백만
+				if acc_trade_price > 300000000: #300백만
 					list_symbol.append(market[4:])
 
 	global DERNIER_SYMBOL
 	DERNIER_SYMBOL = list_symbol[-1]
-	imprimer(Niveau.GENERAL, '[' + ', '.join(list_symbol) + ']')
-	imprimer(Niveau.GENERAL, "매수 기준에 충족하는 위 코인 목록을 모니터링합니다.")
+	imprimer(Niveau.INFORMATION, 
+				"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
+				'[' + ', '.join(list_symbol) + ']')	
 
 	return list_symbol
 
@@ -539,34 +541,34 @@ def obtenir_solde_KRW():
 	return 0
 
 idx = 0
-def animater(s):
+def animater(_s):
 	global idx
 	animation = "|/-\\"
 	idx += 1
-	print(s + animation[idx % len(animation)], end="\r")
+	print(_s + animation[idx % len(animation)], end="\r")
 
 
 if __name__=="__main__":
 	with open("key.txt", 'r') as f:
 		CLE_ACCES = f.readline().strip()
 		CLE_SECRET = f.readline().strip()
-		print("CLE_ACCES : " + CLE_ACCES)
-		print("CLE_SECRET : " + CLE_SECRET)
+		imprimer(Niveau.INFORMATION, "CLE_ACCES : " + CLE_ACCES)
+		imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
 
 	T_TIMEOUT = 30
 	TEMPS_REINITIAL = datetime.now()
-	parser = argparse.ArgumentParser(description="J'EN SAIS RIEN.")
-	parser.add_argument('-s', type=int, required=False, help='-s : 투입할 총액. 미설정 시, 업비트에 있는 총 보유KRW이 투입됩니다.')
+	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
+	parser.add_argument('-s', type=int, required=False, help='-s : La somme mise.')
 	args = parser.parse_args()
 	
 	Sp = S = obtenir_solde_KRW()
-	imprimer(Niveau.GENERAL, "총 보유 KRW : " + format(int(S), ','))
+	imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
 	list_symbol = obtenir_list_symbol()
 
 	Commission = 0.9995
 	if(args.s is not None):
 		if(args.s < 5000000):
-			print("5,000,000원 이상을 입력해야 합니다.")
+			imprimer(Niveau.ERREUR, "Vous devez saisir plus de 5,000,000 won.")
 			exit()
 		else:
 			S = int(args.s * Commission)
@@ -594,7 +596,7 @@ if __name__=="__main__":
 				for symbol in list_symbol:
 					if breakable: 
 						break
-					animater("모니터링 중... ")
+					animater("En train de monitorer... ")
 					
 					if controler_achats(symbol, S):
 						nom_symbol = symbol
@@ -608,10 +610,10 @@ if __name__=="__main__":
 
 			while True:
 				if est_commande_vente_complete(nom_symbol):
-					imprimer(Niveau.SUCCES, "매도 완료. 잔여 매수 요청을 취소합니다.")
+					imprimer(Niveau.SUCCES, "Vente achevee. Annuler le reste de demandes d'achat.")
 					break
 				elif fault >= T_TIMEOUT:
-					imprimer(Niveau.FAULT, "시간 초과.")
+					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
 				if controler_vente(nom_symbol, S, 0.3):
@@ -622,6 +624,6 @@ if __name__=="__main__":
 			Annuler().annuler_achats()
 
 			S = int(obtenir_solde_KRW())
-			interet = "평가손익 : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')'
-			imprimer(Niveau.GENERAL, interet)
+			interet = "Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')'
+			imprimer(Niveau.INFORMATION, interet)
 			S = int(S * Commission)
