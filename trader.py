@@ -83,7 +83,7 @@ class Acheter:
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
 		self.S = _somme_totale
-		self.poids = 0.02
+		self.poids = 0.018
 
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
 		r = _fois_decente
@@ -166,7 +166,7 @@ class Verifier:
 		self.prix_courant = _array_trade_price[-1]
 		self.array_trade_price = _array_trade_price
 
-	### Premiere verification ###
+	##### Premiere verification #####
 	def verfier_surete(self): # 동적 보호매수
 		p = self.array_trade_price[-20]
 		q = self.prix_courant
@@ -189,13 +189,13 @@ class Verifier:
 			return False
 		return True
 
-	### Deuxieme verification ###
+	##### Deuxieme verification #####
 	def verifier_bb(self, _n, _z):
 		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
-		bb_haut = bb_milieu + np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
-		bb_bas = bb_milieu - np.std(np.array(self.array_trade_price)[-1 * _n : -1]) * _z
-		C_MULTIPLICATION_LARGEUR_BANDE = 1.2
-		largeur_bande_minimum = self.prix_courant / 100 * C_MULTIPLICATION_LARGEUR_BANDE
+		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
+		bb_haut = bb_milieu + bb_std * _z
+		bb_bas = bb_milieu - bb_std * _z
+		largeur_bande_minimum = self.prix_courant / 100 * 1.2
 
 		#print("최소 밴드폭 : " + str(largeur_bande_minimum))
 		#print("볼린저밴드 상단 : " + str(bb_haut))
@@ -219,7 +219,7 @@ class Verifier:
 				return True
 		return False
 
-	def verifier_std(self, _n, _z):
+	def verifier_std(self, _n):
 		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
 		bb_haut = mm20 + bb_std * 1.28 # z note 80%
@@ -270,14 +270,15 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 		if std_bas < 0.01: 
 			std_bas += 0.002
 
-	if v.verfier_surete() and v.verifier_prix() and v.verifier_tendance_non_negatif():
-		if v.verifier_std(20, 2):
+	if v.verfier_surete() and v.verifier_prix():
+		if v.verifier_bb(20, 2):
+		#if v.verifier_std(20):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			a.diviser_parabolique(0.3333, 27) # 포물선 매집(14%)
+			a.diviser_parabolique(0.3333, 25) # 포물선 매집(12%)
 			#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
