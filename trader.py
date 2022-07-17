@@ -195,7 +195,7 @@ class Verifier:
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
 		bb_haut = bb_milieu + bb_std * _z
 		bb_bas = bb_milieu - bb_std * _z
-		largeur_bande_minimum = self.prix_courant / 100 * 1.2
+		largeur_bande_minimum = self.prix_courant / 100 * 1
 
 		#print("최소 밴드폭 : " + str(largeur_bande_minimum))
 		#print("볼린저밴드 상단 : " + str(bb_haut))
@@ -203,7 +203,7 @@ class Verifier:
 	
 		if(bb_haut - bb_bas > largeur_bande_minimum):
 			if self.prix_courant < bb_bas:
-				print("Hors de bb !")
+				imprimer(Niveau.INFORMATION, "Hors de bb !")
 				return True
 		return False
 
@@ -623,7 +623,7 @@ if __name__=="__main__":
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
-				if controler_vente(nom_symbol, S, 0.3):
+				if controler_vente(nom_symbol, S, 0.34):
 					fault = 0
 				else:
 					fault += 1
