@@ -53,28 +53,55 @@ def tailler(_prix, _taux):
 		t = round(t, 3)
 	elif t < 10: 
 		t = round(t, 2)
-	elif 10 <= t < 100:
+	elif t < 100:
 		t = round(t, 1)
-	elif 100 <= t < 1000:
+	elif t < 1000:
 		t = round(t, 0)
-	elif 1000 <= t < 10000:
+	elif t < 10000:
 		t = round(t, 0)
 		t -= t % 5
-	elif 10000 <= t < 100000:
+	elif t < 100000:
 		t = round(t, 0)
 		t -= t % 10
-	elif 100000 <= t < 500000:
+	elif t < 500000:
 		t = round(t, 0)
 		t -= t % 50
-	elif 500000 <= t < 1000000:
+	elif t < 1000000:
 		t = round(t, 0)
 		t -= t % 100
-	elif 1000000 <= t < 2000000:
+	elif t < 2000000:
 		t = round(t, 0)
 		t -= t % 500
 	elif 2000000 <= t:
 		t = round(t, 0)
 		t -= t % 1000
+
+	return t
+
+def coller(_prix):
+	t = _prix
+	if t < 0.1:
+		t += 0.0001
+	elif t < 1:
+		t += 0.001
+	elif t < 10: 
+		t += 0.01
+	elif t < 100:
+		t += 0.1
+	elif t < 1000:
+		t += 1
+	elif t < 10000:
+		t += 5
+	elif t < 100000:
+		t += 10
+	elif t < 500000:
+		t += 50
+	elif t < 1000000:
+		t += 100
+	elif t < 2000000:
+		t += 500
+	elif 2000000 <= t:
+		t += 1000
 
 	return t
 
@@ -195,7 +222,7 @@ class Verifier:
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
 		bb_haut = bb_milieu + bb_std * _z
 		bb_bas = bb_milieu - bb_std * _z
-		largeur_bande_minimum = self.prix_courant / 100 * 1
+		largeur_bande_minimum = self.prix_courant / 100 * 1.1
 
 		#print("최소 밴드폭 : " + str(largeur_bande_minimum))
 		#print("볼린저밴드 상단 : " + str(bb_haut))
@@ -212,24 +239,24 @@ class Verifier:
 		mm60 = np.mean(np.array(self.array_trade_price)[-60 : -1])
 		mm120 = np.mean(np.array(self.array_trade_price)[-120 : -1])
 
-		if(mm20 > mm60 > mm120):
+		if mm20 > mm60 > mm120:
 			if self.prix_courant * 0.04 > mm20 - mm60 > 0 and \
 				self.prix_courant > mm60 * 1.01:
-				print("Graphique dont la tendance est positive !")
+				imprimer(Niveau.INFORMATION, "Graphique dont la tendance est positive !")
 				return True
 		return False
 
 	def verifier_std(self, _n):
 		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_haut = mm20 + bb_std * 1.28 # z note 80%
+		bb_limite = mm20 - bb_std * 1.64 # z note 90%
 		longeur = bb_std * 4
 		pourcent = longeur / self.prix_courant
 	
 		global std_bas
 		p = 0.04 - std_bas
 		q = 0.2
-		if p < pourcent < q and self.prix_courant < bb_haut:
+		if p < pourcent < q and self.prix_courant < bb_limite:
 			imprimer(Niveau.INFORMATION, "Hors de la deviation normale ! : " + str(round(p, 3)))
 			return True
 		return False
@@ -271,8 +298,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			std_bas += 0.002
 
 	if v.verfier_surete() and v.verifier_prix():
-		if v.verifier_bb(20, 2):
-		#if v.verifier_std(20):
+		if v.verifier_bb(20, 2) or v.verifier_std(20):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
