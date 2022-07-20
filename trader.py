@@ -119,7 +119,7 @@ class Acheter:
 
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
+			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
 			qn = a * h * n / 100 + a
 			self.acheter(pn, qn)
 
@@ -130,7 +130,7 @@ class Acheter:
 
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
+			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
 			qn = a * pow(r, n - 1)
 			self.acheter(pn, qn)
 
@@ -138,7 +138,7 @@ class Acheter:
 		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
+			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
 			kn = (pow(n, 2) / 2) - (n / 2) + 1
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
@@ -149,7 +149,7 @@ class Acheter:
 
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur))
+			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
 			qn = self.S * lapin[n - 1] / sum(mon_lapin)
 			self.acheter(pn, qn) 
 
@@ -202,8 +202,8 @@ class Verifier:
 		return False
 
 	def verifier_prix(self):
-		if 0.036 < self.prix_courant < 0.0995 or 0.36 < self.prix_courant < 0.995 or 3.6 < self.prix_courant < 9.95 or \
-				36 < self.prix_courant < 99.5 or 360 < self.prix_courant < 995 or 3200 < self.prix_courant:
+		if 0.045 < self.prix_courant < 0.0995 or 0.45 < self.prix_courant < 0.995 or 4.5 < self.prix_courant < 9.95 or \
+				45 < self.prix_courant < 99.5 or 450 < self.prix_courant < 995 or 3600 < self.prix_courant:
 			return True
 		return False
 
@@ -246,10 +246,10 @@ class Verifier:
 				return True
 		return False
 
-	def verifier_std(self, _n):
+	def verifier_std(self, _n, _z):
 		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_limite = mm20 - bb_std * 1.64 # z note 90%
+		bb_limite = mm20 - bb_std * _z # z note 90%
 		longeur = bb_std * 4
 		pourcent = longeur / self.prix_courant
 	
@@ -285,7 +285,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 
 		array_trade_price = obtenir_array_trade_price(dict_response, DUREE_MAXIMUM)
 	except:
-		imprimer(Niveau.EXCEPTION + "Rate de recuperer les donnes de prix.")
+		imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
 		return False
 	
 	#print("심볼 : " + _symbol)
@@ -298,7 +298,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			std_bas += 0.002
 
 	if v.verfier_surete() and v.verifier_prix():
-		if v.verifier_bb(20, 2) or v.verifier_std(20):
+		if v.verifier_bb(20, 2) or v.verifier_std(20, -1.28):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
@@ -554,8 +554,8 @@ def obtenir_list_symbol():
 			for i in range(comte):
 				acc_trade_price += dict_response2[i].get('candle_acc_trade_price')
 
-			if 0.036 < prix < 0.096 or 0.36 < prix < 0.96 or 3.6 < prix < 9.6 or \
-				36 < prix < 96 or 360 < prix < 960 or 3200 < prix:
+			if 0.045 < prix < 0.096 or 0.45 < prix < 0.96 or 4.5 < prix < 9.6 or \
+				45 < prix < 96 or 450 < prix < 960 or 3600 < prix:
 				if acc_trade_price > 300000000: #300백만
 					list_symbol.append(market[4:])
 
