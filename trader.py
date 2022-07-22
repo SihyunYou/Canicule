@@ -123,7 +123,7 @@ class Acheter:
 
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = a * h * n / 100 + a
 			self.acheter(pn, qn)
 
@@ -134,7 +134,7 @@ class Acheter:
 
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = a * pow(r, n - 1)
 			self.acheter(pn, qn)
 
@@ -142,7 +142,7 @@ class Acheter:
 		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			kn = (pow(n, 2) / 2) - (n / 2) + 1
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
@@ -162,7 +162,7 @@ class Acheter:
 
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = self.S * lapin[n - 1] / sum(mon_lapin)
 			self.acheter(pn, qn) 
 
