@@ -112,6 +112,10 @@ class Acheter:
 		self.S = _somme_totale
 		self.poids = 0.018
 
+	# lineaire -> 10 20 30 40 50 = 150
+	# parabolique I -> 10 20 40 70 110 = 250
+	# parabolique II -> 10 20 35 55 80 = 200 
+
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
 		r = _fois_decente
 		h = _difference
@@ -140,6 +144,15 @@ class Acheter:
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
 			kn = (pow(n, 2) / 2) - (n / 2) + 1
+			qn = self.S * kn / s
+			self.acheter(pn, qn)
+
+	def diviser_parabolique2(self, _pourcent_descente, _fois_decente):
+		s = _fois_decente * (5 * pow(_fois_decente, 2) + 15 * _fois_decente + 40) / 6
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
+			kn = 5 / 2 * pow(n, 2) + 5 / 2 * n + 5
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
 
@@ -249,7 +262,7 @@ class Verifier:
 	def verifier_std(self, _n, _z):
 		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_limite = mm20 - bb_std * _z # z note 90%
+		bb_limite = mm20 + bb_std * _z # z note 90%
 		longeur = bb_std * 4
 		pourcent = longeur / self.prix_courant
 	
@@ -297,14 +310,15 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 		if std_bas < 0.01: 
 			std_bas += 0.002
 
-	if v.verfier_surete() and v.verifier_prix():
-		if v.verifier_bb(20, 2) or v.verifier_std(20, -1.28):
+	if v.verifier_prix():
+		if v.verifier_bb(20, 2) or v.verifier_std(20, -1.68):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			a.diviser_parabolique(0.3333, 25) # 포물선 매집(12%)
+			#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
+			a.diviser_parabolique2(0.3333, 28) # 제2형 포물선 매집
 			#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
