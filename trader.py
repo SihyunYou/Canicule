@@ -21,7 +21,7 @@ init(autoreset = True)
 
 UNIT = 3
 DUREE_MAXIMUM = 20 # >= 20
-TEMPS_DORMIR = 0.18
+TEMPS_DORMIR = 0.2
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -624,11 +624,11 @@ if __name__=="__main__":
 
 	nom_symbol = ''
 	while True:
-		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 3): 
+		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 4): 
 			TEMPS_REINITIAL = datetime.now()
 			list_symbol = obtenir_list_symbol()
 
-			if nom_symbol != '':
+			if nom_symbol != '' and nom_symbol in list_symbol:
 				list_symbol.remove(nom_symbol)
 				list_symbol.insert(0, nom_symbol)
 				DERNIER_SYMBOL = list_symbol[-1]
