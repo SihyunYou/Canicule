@@ -151,7 +151,7 @@ class Acheter:
 		s = _fois_decente * (5 * pow(_fois_decente, 2) + 15 * _fois_decente + 40) / 6
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = coller(tailler(self.prix_courant, (n - 1) * (_pourcent_descente * poids_hauteur)))
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			kn = 5 / 2 * pow(n, 2) + 5 / 2 * n + 5
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
