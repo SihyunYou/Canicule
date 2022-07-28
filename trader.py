@@ -233,16 +233,15 @@ class Verifier:
 	def verifier_std_regularise(self, _n):
 		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
-		z = (current_prix - bb_milieu) / bb_std 
+		z = (self.prix_courant - bb_milieu) / bb_std 
 		std_regularise = bb_std / self.prix_courant
 
-		print("z : ", z)
-		print("std_regularise : ", std_regularise)
-		return False
-
+		# x = std_regularise, y = z-score
+		# y <= 9.6 x - 2.24
+		# A(0.1, -1.28), B(0.025, -2)
 		if std_regularise >= 0 and z <= -1.28:
-			if z <= 4.8 * std_regularise - 3.2:
-				imprimer(Niveau.INFORMATION, "신뢰구간 이탈 탐지!")
+			if z <= 9.6 * std_regularise - 2.24:
+				imprimer(Niveau.INFORMATION, "신뢰구간 이탈 탐지! z : " + str(round(z, 3)) + ", std_regularise : " + str(round(std_regularise, 5)))
 				return True
 		return False
 
@@ -302,7 +301,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
 			#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
-			a.diviser_parabolique2(0.3333, 28) # 제2형 포물선 매집
+			a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
 			#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
 			std_bas = 0
