@@ -230,20 +230,19 @@ class Verifier:
 		return True
 
 	##### Deuxieme verification #####
-	def verifier_bb(self, _n, _z):
+	def verifier_std_regularise(self, _n):
 		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_haut = bb_milieu + bb_std * _z
-		bb_bas = bb_milieu - bb_std * _z
-		largeur_bande_minimum = self.prix_courant / 100 * 1.1
+		z = (current_prix - bb_milieu) / bb_std 
+		std_regularise = bb_std / self.prix_courant
 
-		#print("최소 밴드폭 : " + str(largeur_bande_minimum))
-		#print("볼린저밴드 상단 : " + str(bb_haut))
-		#print("볼린저밴드 하단 : " + str(bb_bas))
-	
-		if(bb_haut - bb_bas > largeur_bande_minimum):
-			if self.prix_courant < bb_bas:
-				imprimer(Niveau.INFORMATION, "Hors de bb !")
+		print("z : ", z)
+		print("std_regularise : ", std_regularise)
+		return False
+
+		if std_regularise >= 0 and z <= -1.28:
+			if z <= 4.8 * std_regularise - 3.2:
+				imprimer(Niveau.INFORMATION, "신뢰구간 이탈 탐지!")
 				return True
 		return False
 
@@ -257,21 +256,6 @@ class Verifier:
 				self.prix_courant > mm60 * 1.01:
 				imprimer(Niveau.INFORMATION, "Graphique dont la tendance est positive !")
 				return True
-		return False
-
-	def verifier_std(self, _n, _z):
-		mm20 = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
-		bb_limite = mm20 + bb_std * _z # z note 90%
-		longeur = bb_std * 4
-		pourcent = longeur / self.prix_courant
-	
-		global std_bas
-		p = 0.04 - std_bas
-		q = 0.2
-		if p < pourcent < q and self.prix_courant < bb_limite:
-			imprimer(Niveau.INFORMATION, "Hors de la deviation normale ! : " + str(round(p, 3)))
-			return True
 		return False
 
 
@@ -311,7 +295,7 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			std_bas += 0.002
 
 	if v.verifier_prix():
-		if v.verifier_bb(20, 2) or v.verifier_std(20, -1.68):
+		if v.verifier_std_regularise(20):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
