@@ -237,10 +237,10 @@ class Verifier:
 		std_regularise = bb_std / self.prix_courant
 
 		# x = std_regularise, y = z-score
-		# y <= 9.6 x - 2.24
-		# A(0.1, -1.28), B(0.025, -2)
-		if std_regularise >= 0 and z <= -1.28:
-			if z <= 9.6 * std_regularise - 2.24:
+		# y <= 144 x - 2.72
+		# A(0.01, -1.28), B(0.005, -2), M(0.008, -1.64)
+		if std_regularise >= 0.002 and z <= 0:
+			if z <= 144 * std_regularise - 2.72:
 				imprimer(Niveau.INFORMATION, "신뢰구간 이탈 탐지! z : " + str(round(z, 3)) + ", std_regularise : " + str(round(std_regularise, 5)))
 				return True
 		return False
