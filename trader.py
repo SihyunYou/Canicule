@@ -21,7 +21,7 @@ init(autoreset = True)
 
 UNIT = 3
 DUREE_MAXIMUM = 20 # >= 20
-TEMPS_DORMIR = 0.2
+TEMPS_DORMIR = 0.19
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -237,7 +237,7 @@ class Verifier:
 		std_regularise = bb_std / self.prix_courant
 
 		# x = std_regularise, y = z-score
-		# y <= 144 x - 2.72
+		# y <= 144x - 2.72
 		# A(0.01, -1.28), B(0.005, -2), M(0.008, -1.64)
 		if std_regularise >= 0.002 and z <= 0:
 			if z <= 144 * std_regularise - 2.72:
