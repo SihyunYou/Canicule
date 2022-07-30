@@ -252,12 +252,12 @@ class Verifier:
 	##### Deuxieme verification #####
 	def verifier_bb_variable(self, _n):
 		# x = std_regularise, y = z-note
-		# y <= 144x - 2.72
-		# A(0.01, -1.28), B(0.005, -2)
+		# y <= 256x - 3.84
+		# A(0.01, -1.28), B(0.005, -2.56)
 
 		z = (self.candle.prix_courant - self.mm20) / self.std20 
 		if self.std20_regularise >= 0.002 and z <= -1.28:
-			if z <= 144 * self.std20_regularise - 2.72:
+			if z <= 256 * self.std20_regularise - 3.84:
 				imprimer(Niveau.INFORMATION, 
 							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
 							", std_regularise : " + str(round(self.std20_regularise, 5)))
