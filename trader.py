@@ -16,13 +16,11 @@ import datetime
 from datetime import datetime
 from datetime import timedelta
 from colorama import init, Fore, Back, Style
-import talib
 
 init(autoreset = True)
 
 UNIT = 3
-DUREE_MAXIMUM = 20 # >= 20
-TEMPS_DORMIR = 0.19
+TEMPS_DORMIR = 0.18
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -32,7 +30,6 @@ TEMPS_INITIAL = datetime.now()
 
 uuid_achat = []
 uuid_vente = ''
-premier_prix_achete = 0
 
 class Niveau:
 	INFORMATION = Fore.GREEN + Style.BRIGHT
@@ -201,158 +198,113 @@ class Acheter:
 		time.sleep(TEMPS_DORMIR)
 
 
-def obtenir_prix_courant(_dict_response):
-	return _dict_response[0].get('trade_price')
+class RecupererInfoCandle:
+	def __recuperer_array(self, _s, _n):
+		arr = np.zeros(_n)
+		for i in range(_n):
+			arr[_n - i - 1] = self.dict_response[i].get(_s)
+		return arr
 
-def obtenir_array_opening_price(_dict_response, _n):
-	arr = np.zeros(_n)
-	for i in range(_n):
-		arr[_n - i - 1] = _dict_response[i].get('opening_price')
-	return arr
+	def __init__(self, _symbol):
+		querystring = {
+			"market" : "KRW-" + _symbol,
+			"count" : str(_n)
+		}
 
-def obtenir_array_trade_price(_dict_response, _n):
-	arr = np.zeros(_n)
-	for i in range(_n):
-		arr[_n - i - 1] = _dict_response[i].get('trade_price')
-	return arr
+		try:
+			response = requests.request("GET", URL_CANDLE, params=querystring)
+			self.dict_response = json.loads(response.text)
+			#print("심볼 : " + _symbol)
+		except:
+			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
+			raise Exception("RecupererInfoCandle")
 
-def obtenir_array_high_price(_dict_response, _n):
-	arr = np.zeros(_n)
-	for i in range(_n):
-		arr[_n - i - 1] = _dict_response[i].get('high_price')
-	return arr
-
-def obtenir_array_low_price(_dict_response, _n):
-	arr = np.zeros(_n)
-	for i in range(_n):
-		arr[_n - i - 1] = _dict_response[i].get('low_price')
-	return arr
-
-def obtenir_array_candle_acc_trade_price(_dict_response, _n):
-	arr = np.zeros(_n)
-	for i in range(_n):
-		arr[_n - i - 1] = _dict_response[i].get('candle_acc_trade_price')
-	return arr
+		self.array_opening_price = self.__recuperer_array('opening_price', 200)
+		self.array_trade_price = self.__recuperer_array('trade_price', 200)
+		self.prix_courant = self.array_trade_price[-1]
+		self.array_high_price = self.__recuperer_array('high_price', 200)
+		self.array_low_price = self.__recuperer_array('low_price', 200)
+		self.array_acc_trade_price = self.__recuperer_array('candle_acc_trade_price', 200)
 
 class Verifier:
-	def __init__(self, _dict_response):
-		self.array_trade_price = obtenir_array_trade_price(_dict_response, 20)
-		self.prix_courant = self.array_trade_price[-1]
-		self.array_opening_price = obtenir_array_opening_price(_dict_response, 20)
-		self.array_high_price = obtenir_array_high_price(_dict_response, 20)
-		self.array_low_price = obtenir_array_low_price(_dict_response, 20)
-		self.array_candle_acc_trade_price = obtenir_array_candle_acc_trade_price(_dict_response, 20)
+	def __init__(self, _symbol, _n):
+		self.candle = RecupererInfoCandle(_symbol, _n)
+		self.std20 = np.std(np.array(self.candle.array_trade_price)[-20 : -1])
+		self.std20_regularise = self.std20 / self.candle.prix_courant
+		self.mm20 = np.mean(np.array(self.candle.array_trade_price)[-20 : -1])
 
 	##### Premiere verification #####
-	def verfier_surete(self): # 동적 보호매수
-		p = self.array_trade_price[-20]
-		q = self.prix_courant
-		if - 0.1 < (q - p) / self.prix_courant < 0.25:
+	def verfier_surete(self):
+		p = self.candle.array_trade_price[-20]
+		q = self.candle.prix_courant
+		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25:
 			return True
 		return False
 
 	def verifier_prix(self):
-		if 0.045 < self.prix_courant < 0.0995 or 0.45 < self.prix_courant < 0.995 or 4.5 < self.prix_courant < 9.95 or \
-				45 < self.prix_courant < 99.5 or 450 < self.prix_courant < 995 or 3600 < self.prix_courant:
+		if 0.050 < self.candle.prix_courant < 0.0995 or 0.5 < self.candle.prix_courant < 0.995 or \
+			5 < self.candle.prix_courant < 9.95 or 50 < self.candle.prix_courant < 99.5 or \
+			500 < self.candle.prix_courant < 995 or 4000 < self.candle.prix_courant:
 			return True
 		return False
 
-	def verifier_tendance_non_negatif(self):
-		mm20 = np.mean(np.array(self.array_trade_price)[-20 : -1])
-		mm60 = np.mean(np.array(self.array_trade_price)[-60 : -1])
-		mm120 = np.mean(np.array(self.array_trade_price)[-120 : -1])
-
-		if mm20 <= mm60 <= mm120:
-			return False
-		return True
 
 	##### Deuxieme verification #####
 	def verifier_bb_variable(self, _n):
-		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
-		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
-		z = (self.prix_courant - bb_milieu) / bb_std 
-		std_regularise = bb_std / self.prix_courant
-
-		# x = std_regularise, y = z-score
+		# x = std_regularise, y = z-note
 		# y <= 144x - 2.72
 		# A(0.01, -1.28), B(0.005, -2)
-		if std_regularise >= 0.002 and z <= -1.28:
-			if z <= 144 * std_regularise - 2.72:
-				imprimer(Niveau.INFORMATION, "Hors de bb_variable ! z : " + str(round(z, 3)) + ", std_regularise : " + str(round(std_regularise, 5)))
+
+		z = (self.candle.prix_courant - self.mm20) / self.std20 
+		if self.std20_regularise >= 0.002 and z <= -1.28:
+			if z <= 144 * self.std20_regularise - 2.72:
+				imprimer(Niveau.INFORMATION, 
+							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
+							", std_regularise : " + str(round(self.std20_regularise, 5)))
 				return True
 		return False
 
 	def verifier_vr(self, _n):
-		std_regularise = np.std(np.array(self.array_trade_price)[-1 * _n : -1]) / self.prix_courant
-		if std_regularise > 0.005:
+		if self.std20_regularise > 0.005:
 			h, b, e = 0, 0, 0
 			for i in range(-1 * _n, 0):
-				p = self.array_trade_price[i] - self.array_opening_price[i]
+				p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
 				if p > 0:
-					h += self.array_candle_acc_trade_price[i]
+					h += self.candle.array_acc_trade_price[i]
 				elif p < 0:
-					b += self.array_candle_acc_trade_price[i]
+					b += self.candle.array_acc_trade_price[i]
 				else:
-					e += self.array_candle_acc_trade_price[i]
+					e += self.candle.array_acc_trade_price[i]
 
 			if b <= 0 and e <= 0:
 				return False
 			else:
 				vr = (h + e * 0.5) / (b + e * 0.5) * 100
 				if vr <= 32:
-					imprimer(Niveau.INFORMATION, "Hors de vr ! vr : " + str(round(vr, 2)))
+					imprimer(Niveau.INFORMATION, 
+								"Hors de vr ! vr : " + str(round(vr, 2)))
 					return True
 		return False
 
 	def verifier_decalage_mm(self, _n, _p):
-		mm = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
-		std_regularise = np.std(np.array(self.array_trade_price)[-1 * _n : -1]) / self.prix_courant
-		std_pondere = std_regularise * 20
+		std_pondere = self.std20_regularise * 20
 		decalage = _p * (1 + std_pondere)
 
-		if self.prix_courant < mm * (1 - decalage):
-			imprimer(Niveau.INFORMATION, "Hors d'envelope ! decalage : " + str(round(decalage, 3)))
+		if self.candle.prix_courant < self.mm20 * (1 - decalage):
+			imprimer(Niveau.INFORMATION, 
+						"Hors d'envelope ! decalage : " + str(round(decalage, 3)))
 			return True
-		return False
-
-	def verifier_tendance_positive(self):
-		mm20 = np.mean(np.array(self.array_trade_price)[-20 : -1])
-		mm60 = np.mean(np.array(self.array_trade_price)[-60 : -1])
-		mm120 = np.mean(np.array(self.array_trade_price)[-120 : -1])
-
-		if mm20 > mm60 > mm120:
-			if self.prix_courant * 0.04 > mm20 - mm60 > 0 and \
-				self.prix_courant > mm60 * 1.01:
-				imprimer(Niveau.INFORMATION, "Graphique dont la tendance est positive !")
-				return True
 		return False
 
 
 DERNIER_SYMBOL = ''
 def controler_achats(_symbol, _somme_totale): # 전부매집
-	global DUREE_MAXIMUM
-	querystring = {
-		"market" : "KRW-" + _symbol,
-		"count" : str(DUREE_MAXIMUM)
-		}
-
-	try:
-		response = requests.request("GET", URL_CANDLE, params=querystring)
-		dict_response = json.loads(response.text)
-	except:
-		imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
-		return False
-	
-	#print("심볼 : " + _symbol)
-
 	v = Verifier(dict_response)
 	global DERNIER_SYMBOL
 
 	if v.verifier_prix():
 		if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
-			global premier_prix_achete
-			premier_prix_achete = obtenir_prix_courant(dict_response)
-			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
+			a = Acheter(_symbol, v.candle.prix_courant, _somme_totale)
 			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
 			#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
@@ -543,25 +495,18 @@ def controler_vente(_symbol, _somme_totale, _proportion_profit):
 		
 		montant = (balance + locked) * avg_buy_price
 		count_montant_insuffissant = 0
-		global premier_prix_achete
 
 		if(balance > 0.00001 and montant > 5000):
 			if uuid_vente != "":
 				Annuler().annuler_vente()
 				time.sleep(TEMPS_DORMIR)
-
 			time.sleep(TEMPS_DORMIR)
-			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
 
-			if premier_prix_achete > 0:
-				#proportion_supplement = (premier_prix_achete - avg_buy_price) / premier_prix_achete * 1
-				proportion_supplement = 0
-				proportion_vente = _proportion_profit + proportion_supplement
-				imprimer(Niveau.INFORMATION, "prix de moyenne d'acaht : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * proportion_vente)))
-				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * proportion_vente))
-			else:
-				imprimer(Niveau.AVERTISSEMENT,  "Le premier prix d'achat est 0.")
-				vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
+			balance, locked, avg_buy_price = examiner_symbol_compte(_symbol)
+			proportion_supplement = 0
+			proportion_vente = _proportion_profit + proportion_supplement
+			imprimer(Niveau.INFORMATION, "prix de moyenne d'acaht : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * proportion_vente)))
+			vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * proportion_vente))
 
 			flag_commande_vendre = True
 			return True
@@ -588,25 +533,20 @@ def obtenir_list_symbol():
 
 	for dr in tqdm(dict_response1, desc = 'Initialisation'):
 		market = dr.get('market')
-		comte = 60
 		if(market[:3] == "KRW" and market[4:] not in list_symbol_interdit):
-			querystring = {"market" : market, "count" : str(comte)} # 3시간 기준
-
 			try:
-				response = requests.request("GET", URL_CANDLE, params=querystring)
+				r = RecupererInfoCandle(market[4:], 60)
 				time.sleep(0.054)
-				dict_response2 = json.loads(response.text)
 			except:
 				imprimer(Niveau.ERREUR, "Rate de recuperer la liste de symbols. (2)")
-				raise Exception('')
+				raise Exception('RecupererInfoCandle')
 
-			prix = obtenir_prix_courant(dict_response2)
-			acc_trade_price = 0
-			for i in range(comte):
-				acc_trade_price += dict_response2[i].get('candle_acc_trade_price')
+			if 0.045 < r.prix_courant < 0.096 or 0.45 < r.prix_courant < 0.96 or 4.5 < r.prix_courant < 9.6 or \
+				45 < r.prix_courant < 96 or 450 < r.prix_courant < 960 or 3600 < r.prix_courant:
+				acc_trade_price = 0
+				for i in range(comte):
+					acc_trade_price += r.array_acc_trade_price[i]
 
-			if 0.045 < prix < 0.096 or 0.45 < prix < 0.96 or 4.5 < prix < 9.6 or \
-				45 < prix < 96 or 450 < prix < 960 or 3600 < prix:
 				if acc_trade_price > 300000000: #300백만
 					list_symbol.append(market[4:])
 
