@@ -208,7 +208,7 @@ class RecupererInfoCandle:
 	def __init__(self, _symbol):
 		querystring = {
 			"market" : "KRW-" + _symbol,
-			"count" : str(_n)
+			"count" : '200'
 		}
 
 		try:
@@ -227,8 +227,8 @@ class RecupererInfoCandle:
 		self.array_acc_trade_price = self.__recuperer_array('candle_acc_trade_price', 200)
 
 class Verifier:
-	def __init__(self, _symbol, _n):
-		self.candle = RecupererInfoCandle(_symbol, _n)
+	def __init__(self, _symbol):
+		self.candle = RecupererInfoCandle(_symbol)
 		self.std20 = np.std(np.array(self.candle.array_trade_price)[-20 : -1])
 		self.std20_regularise = self.std20 / self.candle.prix_courant
 		self.mm20 = np.mean(np.array(self.candle.array_trade_price)[-20 : -1])
@@ -280,7 +280,7 @@ class Verifier:
 				return False
 			else:
 				vr = (h + e * 0.5) / (b + e * 0.5) * 100
-				if vr <= 32:
+				if vr <= 40:
 					imprimer(Niveau.INFORMATION, 
 								"Hors de vr ! vr : " + str(round(vr, 2)))
 					return True
@@ -300,10 +300,10 @@ class Verifier:
 DERNIER_SYMBOL = ''
 def controler_achats(_symbol, _somme_totale): # 전부매집
 	try:
-		v = Verifier(dict_response)
-	except:
-		return False
-	
+		v = Verifier(_symbol)
+	except Exception as e:
+		print(e)
+
 	if v.verifier_prix():
 		if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
 			a = Acheter(_symbol, v.candle.prix_courant, _somme_totale)
@@ -537,16 +537,16 @@ def obtenir_list_symbol():
 		market = dr.get('market')
 		if(market[:3] == "KRW" and market[4:] not in list_symbol_interdit):
 			try:
-				r = RecupererInfoCandle(market[4:], 60)
+				r = RecupererInfoCandle(market[4:])
 				time.sleep(0.054)
 			except:
 				imprimer(Niveau.ERREUR, "Rate de recuperer la liste de symbols. (2)")
 				raise Exception('RecupererInfoCandle')
 
-			if 0.045 < r.prix_courant < 0.096 or 0.45 < r.prix_courant < 0.96 or 4.5 < r.prix_courant < 9.6 or \
-				45 < r.prix_courant < 96 or 450 < r.prix_courant < 960 or 3600 < r.prix_courant:
+			if 0.05 < r.prix_courant < 0.096 or 0.5 < r.prix_courant < 0.96 or 5 < r.prix_courant < 9.6 or \
+				50 < r.prix_courant < 96 or 500 < r.prix_courant < 960 or 4000 < r.prix_courant:
 				acc_trade_price = 0
-				for i in range(comte):
+				for i in range(80):
 					acc_trade_price += r.array_acc_trade_price[i]
 
 				if acc_trade_price > 300000000: #300백만
