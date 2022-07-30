@@ -16,6 +16,7 @@ import datetime
 from datetime import datetime
 from datetime import timedelta
 from colorama import init, Fore, Back, Style
+import talib
 
 init(autoreset = True)
 
@@ -200,11 +201,47 @@ class Acheter:
 		time.sleep(TEMPS_DORMIR)
 
 
-std_bas = 0
+def obtenir_prix_courant(_dict_response):
+	return _dict_response[0].get('trade_price')
+
+def obtenir_array_opening_price(_dict_response, _n):
+	arr = np.zeros(_n)
+	for i in range(_n):
+		arr[_n - i - 1] = _dict_response[i].get('opening_price')
+	return arr
+
+def obtenir_array_trade_price(_dict_response, _n):
+	arr = np.zeros(_n)
+	for i in range(_n):
+		arr[_n - i - 1] = _dict_response[i].get('trade_price')
+	return arr
+
+def obtenir_array_high_price(_dict_response, _n):
+	arr = np.zeros(_n)
+	for i in range(_n):
+		arr[_n - i - 1] = _dict_response[i].get('high_price')
+	return arr
+
+def obtenir_array_low_price(_dict_response, _n):
+	arr = np.zeros(_n)
+	for i in range(_n):
+		arr[_n - i - 1] = _dict_response[i].get('low_price')
+	return arr
+
+def obtenir_array_candle_acc_trade_price(_dict_response, _n):
+	arr = np.zeros(_n)
+	for i in range(_n):
+		arr[_n - i - 1] = _dict_response[i].get('candle_acc_trade_price')
+	return arr
+
 class Verifier:
-	def __init__(self, _array_trade_price):
-		self.prix_courant = _array_trade_price[-1]
-		self.array_trade_price = _array_trade_price
+	def __init__(self, _dict_response):
+		self.array_trade_price = obtenir_array_trade_price(_dict_response, 20)
+		self.prix_courant = self.array_trade_price[-1]
+		self.array_opening_price = obtenir_array_opening_price(_dict_response, 20)
+		self.array_high_price = obtenir_array_high_price(_dict_response, 20)
+		self.array_low_price = obtenir_array_low_price(_dict_response, 20)
+		self.array_candle_acc_trade_price = obtenir_array_candle_acc_trade_price(_dict_response, 20)
 
 	##### Premiere verification #####
 	def verfier_surete(self): # 동적 보호매수
@@ -230,7 +267,7 @@ class Verifier:
 		return True
 
 	##### Deuxieme verification #####
-	def verifier_std_regularise(self, _n):
+	def verifier_bb_variable(self, _n):
 		bb_milieu = np.mean(np.array(self.array_trade_price)[-1 * _n : -1]) 
 		bb_std = np.std(np.array(self.array_trade_price)[-1 * _n : -1])
 		z = (self.prix_courant - bb_milieu) / bb_std 
@@ -238,11 +275,44 @@ class Verifier:
 
 		# x = std_regularise, y = z-score
 		# y <= 144x - 2.72
-		# A(0.01, -1.28), B(0.005, -2), M(0.008, -1.64)
-		if std_regularise >= 0.002 and z <= 0:
+		# A(0.01, -1.28), B(0.005, -2)
+		if std_regularise >= 0.002 and z <= -1.28:
 			if z <= 144 * std_regularise - 2.72:
-				imprimer(Niveau.INFORMATION, "신뢰구간 이탈 탐지! z : " + str(round(z, 3)) + ", std_regularise : " + str(round(std_regularise, 5)))
+				imprimer(Niveau.INFORMATION, "Hors de bb_variable ! z : " + str(round(z, 3)) + ", std_regularise : " + str(round(std_regularise, 5)))
 				return True
+		return False
+
+	def verifier_vr(self, _n):
+		std_regularise = np.std(np.array(self.array_trade_price)[-1 * _n : -1]) / self.prix_courant
+		if std_regularise > 0.005:
+			h, b, e = 0, 0, 0
+			for i in range(-1 * _n, 0):
+				p = self.array_trade_price[i] - self.array_opening_price[i]
+				if p > 0:
+					h += self.array_candle_acc_trade_price[i]
+				elif p < 0:
+					b += self.array_candle_acc_trade_price[i]
+				else:
+					e += self.array_candle_acc_trade_price[i]
+
+			if b <= 0 and e <= 0:
+				return False
+			else:
+				vr = (h + e * 0.5) / (b + e * 0.5) * 100
+				if vr <= 32:
+					imprimer(Niveau.INFORMATION, "Hors de vr ! vr : " + str(round(vr, 2)))
+					return True
+		return False
+
+	def verifier_decalage_mm(self, _n, _p):
+		mm = np.mean(np.array(self.array_trade_price)[-1 * _n : -1])
+		std_regularise = np.std(np.array(self.array_trade_price)[-1 * _n : -1]) / self.prix_courant
+		std_pondere = std_regularise * 20
+		decalage = _p * (1 + std_pondere)
+
+		if self.prix_courant < mm * (1 - decalage):
+			imprimer(Niveau.INFORMATION, "Hors d'envelope ! decalage : " + str(round(decalage, 3)))
+			return True
 		return False
 
 	def verifier_tendance_positive(self):
@@ -258,15 +328,6 @@ class Verifier:
 		return False
 
 
-def obtenir_prix_courant(_dict_response): # 현재 종가 구하기
-	return _dict_response[0].get('trade_price')
-
-def obtenir_array_trade_price(_dict_response, _n): # 종가 리스트 구하기
-	arr = np.zeros(_n)
-	for i in range(_n):
-		arr[_n - i - 1] = _dict_response[i].get('trade_price')
-	return arr
-
 DERNIER_SYMBOL = ''
 def controler_achats(_symbol, _somme_totale): # 전부매집
 	global DUREE_MAXIMUM
@@ -278,23 +339,17 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 	try:
 		response = requests.request("GET", URL_CANDLE, params=querystring)
 		dict_response = json.loads(response.text)
-
-		array_trade_price = obtenir_array_trade_price(dict_response, DUREE_MAXIMUM)
 	except:
 		imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
 		return False
 	
 	#print("심볼 : " + _symbol)
 
-	v = Verifier(array_trade_price)
+	v = Verifier(dict_response)
 	global DERNIER_SYMBOL
-	global std_bas
-	if _symbol == DERNIER_SYMBOL:
-		if std_bas < 0.01: 
-			std_bas += 0.002
 
 	if v.verifier_prix():
-		if v.verifier_std_regularise(20):
+		if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
 			global premier_prix_achete
 			premier_prix_achete = obtenir_prix_courant(dict_response)
 			a = Acheter(_symbol, premier_prix_achete, _somme_totale)
@@ -304,7 +359,6 @@ def controler_achats(_symbol, _somme_totale): # 전부매집
 			a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
 			#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
-			std_bas = 0
 			imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + _symbol + '\'')
 			t = threading.Thread(target = winsound.Beep, args=(440, 500))
 			t.start()

@@ -1,5 +1,4 @@
 BTC
-ETH
 NU
 BTT
 AERGO
