@@ -299,9 +299,11 @@ class Verifier:
 
 DERNIER_SYMBOL = ''
 def controler_achats(_symbol, _somme_totale): # 전부매집
-	v = Verifier(dict_response)
-	global DERNIER_SYMBOL
-
+	try:
+		v = Verifier(dict_response)
+	except:
+		return False
+	
 	if v.verifier_prix():
 		if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
 			a = Acheter(_symbol, v.candle.prix_courant, _somme_totale)
