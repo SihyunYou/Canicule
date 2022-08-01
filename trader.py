@@ -16,11 +16,12 @@ import datetime
 from datetime import datetime
 from datetime import timedelta
 from colorama import init, Fore, Back, Style
+import traceback
 
 init(autoreset = True)
 
 UNIT = 3
-TEMPS_DORMIR = 0.18
+TEMPS_DORMIR = 0.17
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -237,7 +238,7 @@ class Verifier:
 	def verfier_surete(self):
 		p = self.candle.array_trade_price[-20]
 		q = self.candle.prix_courant
-		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25:
+		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25 and self.candle.prix_courant < self.mm20:
 			return True
 		return False
 
@@ -252,12 +253,11 @@ class Verifier:
 	##### Deuxieme verification #####
 	def verifier_bb_variable(self, _n):
 		# x = std_regularise, y = z-note
-		# y <= 256x - 3.84
-		# A(0.01, -1.28), B(0.005, -2.56)
+		# y <= 144x - 2.72
 
 		z = (self.candle.prix_courant - self.mm20) / self.std20 
-		if self.std20_regularise >= 0.002 and z <= -1.28:
-			if z <= 256 * self.std20_regularise - 3.84:
+		if self.std20_regularise >= 0.003 and z <= 0:
+			if z <= 144 * self.std20_regularise - 2.72:
 				imprimer(Niveau.INFORMATION, 
 							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
 							", std_regularise : " + str(round(self.std20_regularise, 5)))
@@ -301,23 +301,22 @@ DERNIER_SYMBOL = ''
 def controler_achats(_symbol, _somme_totale): # 전부매집
 	try:
 		v = Verifier(_symbol)
-	except Exception as e:
-		print(e)
-
-	if v.verifier_prix():
-		if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
-			a = Acheter(_symbol, v.candle.prix_courant, _somme_totale)
-			#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
-			#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-			#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
-			a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
-			#a.diviser_lapin(0.34, 16) # 토끼 매집
+		if v.verifier_prix():
+			if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
+				a = Acheter(_symbol, v.candle.prix_courant, _somme_totale)
+				#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
+				#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
+				#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
+				a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
+				#a.diviser_lapin(0.34, 16) # 토끼 매집
 			
-			imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + _symbol + '\'')
-			t = threading.Thread(target = winsound.Beep, args=(440, 500))
-			t.start()
+				imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + _symbol + '\'')
+				t = threading.Thread(target = winsound.Beep, args=(440, 500))
+				t.start()
 
-			return True
+				return True
+	except Exception as e:
+		traceback.print_exc()
 	return False
 
 
