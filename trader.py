@@ -238,7 +238,8 @@ class Verifier:
 	def verfier_surete(self):
 		p = self.candle.array_trade_price[-20]
 		q = self.candle.prix_courant
-		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25 and self.candle.prix_courant < self.mm20:
+		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25 and \
+			self.candle.prix_courant < self.mm20 - self.std20 * 0.5243:
 			return True
 		return False
 
@@ -301,7 +302,7 @@ DERNIER_SYMBOL = ''
 def controler_achats(_symbol, _somme_totale): # 전부매집
 	try:
 		v = Verifier(_symbol)
-		if v.verifier_prix():
+		if v.verfier_surete() and v.verifier_prix():
 			if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
 				a = Acheter(_symbol, v.candle.prix_courant, _somme_totale)
 				#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
