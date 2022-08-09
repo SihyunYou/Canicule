@@ -169,7 +169,7 @@ class Verifier:
 		return False
 
 
-	##### Deuxieme verification #####
+	##### Deuxieme verification negative #####
 	def verifier_bb_variable(self, _n):
 		# x = std_regularise, y = z-note
 		# y <= 144x - 2.72
@@ -184,7 +184,7 @@ class Verifier:
 		return False
 
 	def verifier_vr(self, _n, _p):
-		if self.std20_regularise > 0.005:
+		if self.std20_regularise >= 0.005:
 			h, b, e = 0, 0, 0
 			for i in range(-1 * _n, 0):
 				p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
@@ -215,14 +215,19 @@ class Verifier:
 			return True
 		return False
 
-	def verifier_tendance_positive(self):
-		mm60 = np.mean(np.array(self.candle.array_trade_price)[-60 : -1])
-		mm120 = np.mean(np.array(self.candle.array_trade_price)[-120 : -1])
 
-		if self.mm20 >= mm60 >= mm120:
-			imprimer(Niveau.INFORMATION,
-						"Tendance positive !")
-			return True
+	##### Deuxieme verification positive #####
+	def verifier_tendance_positive(self):
+		if self.std20_regularise >= 0.005:
+			mm5 = np.mean(np.array(self.candle.array_trade_price)[-5 : -1])
+			mm60 = np.mean(np.array(self.candle.array_trade_price)[-60 : -1])
+			mm120 = np.mean(np.array(self.candle.array_trade_price)[-120 : -1])
+
+			if (self.candle.prix_courant - self.mm20) / self.mm20 < 1.24:
+				if mm5 > self.mm20 > mm60 > mm120:
+					imprimer(Niveau.INFORMATION,
+								"Tendance positive !")
+				return True
 		return False
 
 
@@ -602,19 +607,18 @@ if __name__=="__main__":
 					try:
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
-							verification_passable = False
-							if v.verifier_bb_variable(20) or v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6): # NEGATIF
-								a = Acheter(symbol, v.candle.prix_courant, S)
-								#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
-								#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-								#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
-								a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
-								#a.diviser_lapin(0.34, 16) # 토끼 매집
+							if v.verifier_bb_variable(20) or v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6):
+								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
 								verification_passable = True
-							elif v.verifier_tendance_positive(): # POSITIF
-								a = Acheter(symbol, v.candle.prix_courant, S)
-								a.diviser_parabolique(0.35, 26)
+							elif v.verifier_tendance_positive():
+								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique(0.35, 26) # 제1형 포물선 매집
 								verification_passable = True
+							else:
+								verification_passable = False
+
+							#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
+							#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
+							#a.diviser_lapin(0.34, 16) # 토끼 매집
 
 							if verification_passable:
 								nom_symbol = symbol
