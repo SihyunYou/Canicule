@@ -154,10 +154,10 @@ class Verifier:
 
 	##### Premiere verification #####
 	def verfier_surete(self):
-		p = self.candle.array_trade_price[-20]
+		p = self.candle.array_trade_price[-60]
 		q = self.candle.prix_courant
-		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25 and \
-			self.candle.prix_courant < self.mm20 - self.std20 * 0.2533: # 0.2533(10%), 0.5243(20%)
+		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4 and \
+			self.candle.prix_courant < self.mm20 - self.std20 * 0: # 0.2533(10%), 0.5243(20%)
 			return True
 		return False
 
@@ -212,6 +212,16 @@ class Verifier:
 		if self.candle.prix_courant < self.mm20 * (1 - decalage):
 			imprimer(Niveau.INFORMATION, 
 						"Hors d'envelope ! decalage : " + str(round(decalage, 3)))
+			return True
+		return False
+
+	def verifier_tendance_positive(self):
+		mm60 = np.mean(np.array(self.candle.array_trade_price)[-60 : -1])
+		mm120 = np.mean(np.array(self.candle.array_trade_price)[-120 : -1])
+
+		if self.mm20 >= mm60 >= mm120:
+			imprimer(Niveau.INFORMATION,
+						"Tendance positive !")
 			return True
 		return False
 
@@ -592,20 +602,27 @@ if __name__=="__main__":
 					try:
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
-							if v.verifier_bb_variable(20) or v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6):
+							verification_passable = False
+							if v.verifier_bb_variable(20) or v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6): # NEGATIF
 								a = Acheter(symbol, v.candle.prix_courant, S)
 								#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
 								#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
 								#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
 								a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
 								#a.diviser_lapin(0.34, 16) # 토끼 매집
-			
-								imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
-								t = threading.Thread(target = winsound.Beep, args=(440, 500))
-								t.start()
+								verification_passable = True
+							elif v.verifier_tendance_positive(): # POSITIF
+								a = Acheter(symbol, v.candle.prix_courant, S)
+								a.diviser_parabolique(0.35, 26)
+								verification_passable = True
 
+							if verification_passable:
 								nom_symbol = symbol
 								breakable = True
+								imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
+							
+								t = threading.Thread(target = winsound.Beep, args=(440, 500))
+								t.start()
 					except Exception as e:
 						traceback.print_exc()
 					time.sleep(0.0515)
