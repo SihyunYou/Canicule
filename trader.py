@@ -219,15 +219,14 @@ class Verifier:
 	##### Deuxieme verification positive #####
 	def verifier_tendance_positive(self):
 		if self.std20_regularise >= 0.005:
-			mm5 = np.mean(np.array(self.candle.array_trade_price)[-5 : -1])
 			mm60 = np.mean(np.array(self.candle.array_trade_price)[-60 : -1])
 			mm120 = np.mean(np.array(self.candle.array_trade_price)[-120 : -1])
 
 			if (self.candle.prix_courant - self.mm20) / self.mm20 < 1.24:
-				if mm5 > self.mm20 > mm60 > mm120:
+				if self.mm20 > mm60 > mm120:
 					imprimer(Niveau.INFORMATION,
 								"Tendance positive !")
-				return True
+					return True
 		return False
 
 
