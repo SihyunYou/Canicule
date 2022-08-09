@@ -27,7 +27,6 @@ URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
 CLE_SECRET = ''
 URL_SERVEUR = 'https://api.upbit.com'
-TEMPS_INITIAL = datetime.now()
 
 uuid_achat = []
 uuid_vente = ''
@@ -103,6 +102,217 @@ def coller(_prix):
 		t += 1000
 
 	return t
+
+
+class RecupererCodeMarche:
+	def __init__(self):
+		try:
+			headers = {"Accept": "application/json"}
+			response = requests.request("GET", "https://api.upbit.com/v1/market/all?isDetails=false", headers=headers)
+			self.dict_response = json.loads(response.text)
+		except:
+			imprimer(Niveau.ERREUR, "Rate de recuperer la liste de symbols. (1)")
+			raise Exception('Recuperer code de marche')
+
+
+COMTE = 200
+class RecupererInfoCandle:
+	def __recuperer_array(self, _s, _n):
+		arr = np.zeros(_n)
+		for i in range(_n):
+			arr[_n - i - 1] = self.dict_response[i].get(_s)
+		return arr
+
+	def __init__(self, _symbol):
+		querystring = {
+			"market" : "KRW-" + _symbol,
+			"count" : str(COMTE)
+		}
+
+		try:
+			response = requests.request("GET", URL_CANDLE, params=querystring)
+			self.dict_response = json.loads(response.text)
+			#print("심볼 : " + _symbol)
+		except:
+			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
+			raise Exception("RecupererInfoCandle")
+
+		self.array_opening_price = self.__recuperer_array('opening_price', COMTE)
+		self.array_trade_price = self.__recuperer_array('trade_price', COMTE)
+		self.prix_courant = self.array_trade_price[-1]
+		self.array_high_price = self.__recuperer_array('high_price', COMTE)
+		self.array_low_price = self.__recuperer_array('low_price', COMTE)
+		self.array_acc_trade_price = self.__recuperer_array('candle_acc_trade_price', COMTE)
+
+
+class Verifier:
+	def __init__(self, _symbol):
+		self.candle = RecupererInfoCandle(_symbol)
+		self.std20 = np.std(np.array(self.candle.array_trade_price)[-20 : -1])
+		self.std20_regularise = self.std20 / self.candle.prix_courant
+		self.mm20 = np.mean(np.array(self.candle.array_trade_price)[-20 : -1])
+
+	##### Premiere verification #####
+	def verfier_surete(self):
+		p = self.candle.array_trade_price[-20]
+		q = self.candle.prix_courant
+		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25 and \
+			self.candle.prix_courant < self.mm20 - self.std20 * 0.2533: # 0.2533(10%), 0.5243(20%)
+			return True
+		return False
+
+	def verifier_prix(self):
+		if 0.048 < self.candle.prix_courant < 0.0995 or 0.48 < self.candle.prix_courant < 0.995 or \
+			4.8 < self.candle.prix_courant < 9.95 or 48 < self.candle.prix_courant < 99.5 or \
+			480 < self.candle.prix_courant < 995 or 3600 < self.candle.prix_courant:
+			return True
+		return False
+
+
+	##### Deuxieme verification #####
+	def verifier_bb_variable(self, _n):
+		# x = std_regularise, y = z-note
+		# y <= 144x - 2.72
+
+		z = (self.candle.prix_courant - self.mm20) / self.std20 
+		if self.std20_regularise >= 0.003 and z <= 0:
+			if z <= 144 * self.std20_regularise - 2.72:
+				imprimer(Niveau.INFORMATION, 
+							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
+							", std_regularise : " + str(round(self.std20_regularise, 5)))
+				return True
+		return False
+
+	def verifier_vr(self, _n, _p):
+		if self.std20_regularise > 0.005:
+			h, b, e = 0, 0, 0
+			for i in range(-1 * _n, 0):
+				p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
+				if p > 0:
+					h += self.candle.array_acc_trade_price[i]
+				elif p < 0:
+					b += self.candle.array_acc_trade_price[i]
+				else:
+					e += self.candle.array_acc_trade_price[i]
+
+			if b <= 0 and e <= 0:
+				return False
+			else:
+				vr = (h + e * 0.5) / (b + e * 0.5) * 100
+				if vr <= _p:
+					imprimer(Niveau.INFORMATION, 
+								"Hors de vr ! vr : " + str(round(vr, 2)))
+					return True
+		return False
+
+	def verifier_decalage_mm(self, _n, _p):
+		std_pondere = self.std20_regularise * 20
+		decalage = _p * (1 + std_pondere)
+
+		if self.candle.prix_courant < self.mm20 * (1 - decalage):
+			imprimer(Niveau.INFORMATION, 
+						"Hors d'envelope ! decalage : " + str(round(decalage, 3)))
+			return True
+		return False
+
+
+class Annuler:
+	def annuler_achats(self):
+		global uuid_achat
+
+		while True:
+			try:
+				for p in uuid_achat:
+					self.annuler_commande(p)
+				uuid_achat.clear()
+				return
+			except:
+				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande d'achat.")
+				time.sleep(TEMPS_EXCEPTION)
+			
+	def annuler_vente(self):
+		global uuid_vente
+		
+		while True:
+			try:
+				self.annuler_commande(uuid_vente)
+				uuid_vente = ''
+				return
+			except:
+				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande de vente.")
+				time.sleep(TEMPS_EXCEPTION)
+
+	def annuler_commande(self, _uuid):
+		global CLE_ACCES
+		query = {
+			'uuid': _uuid,
+		}
+		query_string = urlencode(query).encode()
+
+		m = hashlib.sha512()
+		m.update(query_string)
+		query_hash = m.hexdigest()
+
+		payload = {
+			'access_key': CLE_ACCES,
+			'nonce': str(uuid.uuid4()),
+			'query_hash': query_hash,
+			'query_hash_alg': 'SHA512',
+		}
+
+		jwt_token = jwt.encode(payload, CLE_SECRET)
+		authorize_token = 'Bearer {}'.format(jwt_token)
+		headers = {"Authorization": authorize_token}
+
+		response = requests.delete(URL_SERVEUR + "/v1/order", params=query, headers=headers)
+		dict_response = json.loads(response.text)
+		#print(dict_response)
+			
+		time.sleep(TEMPS_DORMIR)
+		
+
+class ExaminerCompte:
+	def __init__(self):
+		payload = {
+			'access_key': CLE_ACCES,
+			'nonce': str(uuid.uuid4()),
+		}
+
+		jwt_token = jwt.encode(payload, CLE_SECRET)
+		authorize_token = 'Bearer {}'.format(jwt_token)
+		headers = {"Authorization": authorize_token}
+
+		while True:
+			try:
+				response = requests.get(URL_SERVEUR + "/v1/accounts", headers=headers)
+				self.dict_response = json.loads(response.text)
+				time.sleep(TEMPS_DORMIR)
+				break
+			except:
+				time.sleep(TEMPS_DORMIR)
+
+	def recuperer_solde_krw(self):
+		for mon_dict in self.dict_response:
+			if mon_dict.get('currency') == "KRW":
+				return float(mon_dict.get('balance'))
+		return 0
+
+	def recuperer_symbols(self):
+		symbols = []
+		for mon_dict in self.dict_response:
+			symbols.append(mon_dict.get('currency'))
+		return symbols
+
+	def recuperer_symbol_info(self, _symbol):
+		for mon_dict in self.dict_response:
+			if mon_dict.get('currency') == _symbol:
+				balance = float(mon_dict.get('balance'))
+				locked = float(mon_dict.get('locked'))
+				avg_buy_price = float(mon_dict.get('avg_buy_price'))
+
+				return balance, locked, avg_buy_price
+		return -1, -1, -1
+
 
 class Acheter:
 	def __init__(self, _symbol, _prix_courant, _somme_totale):
@@ -199,137 +409,14 @@ class Acheter:
 		time.sleep(TEMPS_DORMIR)
 
 
-COMTE = 200
-class RecupererInfoCandle:
-	def __recuperer_array(self, _s, _n):
-		arr = np.zeros(_n)
-		for i in range(_n):
-			arr[_n - i - 1] = self.dict_response[i].get(_s)
-		return arr
-
-	def __init__(self, _symbol):
-		querystring = {
-			"market" : "KRW-" + _symbol,
-			"count" : str(COMTE)
-		}
-
-		try:
-			response = requests.request("GET", URL_CANDLE, params=querystring)
-			self.dict_response = json.loads(response.text)
-			#print("심볼 : " + _symbol)
-		except:
-			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
-			raise Exception("RecupererInfoCandle")
-
-		self.array_opening_price = self.__recuperer_array('opening_price', COMTE)
-		self.array_trade_price = self.__recuperer_array('trade_price', COMTE)
-		self.prix_courant = self.array_trade_price[-1]
-		self.array_high_price = self.__recuperer_array('high_price', COMTE)
-		self.array_low_price = self.__recuperer_array('low_price', COMTE)
-		self.array_acc_trade_price = self.__recuperer_array('candle_acc_trade_price', COMTE)
-
-
-class Verifier:
-	def __init__(self, _symbol):
-		self.candle = RecupererInfoCandle(_symbol)
-		self.std20 = np.std(np.array(self.candle.array_trade_price)[-20 : -1])
-		self.std20_regularise = self.std20 / self.candle.prix_courant
-		self.mm20 = np.mean(np.array(self.candle.array_trade_price)[-20 : -1])
-
-	##### Premiere verification #####
-	def verfier_surete(self):
-		p = self.candle.array_trade_price[-20]
-		q = self.candle.prix_courant
-		if - 0.1 < (q - p) / self.candle.prix_courant < 0.25 and \
-			self.candle.prix_courant < self.mm20 - self.std20 * 0.2533: # 0.2533(10%), 0.5243(20%)
-			return True
-		return False
-
-	def verifier_prix(self):
-		if 0.048 < self.candle.prix_courant < 0.0995 or 0.48 < self.candle.prix_courant < 0.995 or \
-			4.8 < self.candle.prix_courant < 9.95 or 48 < self.candle.prix_courant < 99.5 or \
-			480 < self.candle.prix_courant < 995 or 3600 < self.candle.prix_courant:
-			return True
-		return False
-
-
-	##### Deuxieme verification #####
-	def verifier_bb_variable(self, _n):
-		# x = std_regularise, y = z-note
-		# y <= 144x - 2.72
-
-		z = (self.candle.prix_courant - self.mm20) / self.std20 
-		if self.std20_regularise >= 0.003 and z <= 0:
-			if z <= 144 * self.std20_regularise - 2.72:
-				imprimer(Niveau.INFORMATION, 
-							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
-							", std_regularise : " + str(round(self.std20_regularise, 5)))
-				return True
-		return False
-
-	def verifier_vr(self, _n):
-		if self.std20_regularise > 0.005:
-			h, b, e = 0, 0, 0
-			for i in range(-1 * _n, 0):
-				p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
-				if p > 0:
-					h += self.candle.array_acc_trade_price[i]
-				elif p < 0:
-					b += self.candle.array_acc_trade_price[i]
-				else:
-					e += self.candle.array_acc_trade_price[i]
-
-			if b <= 0 and e <= 0:
-				return False
-			else:
-				vr = (h + e * 0.5) / (b + e * 0.5) * 100
-				if vr <= 40:
-					imprimer(Niveau.INFORMATION, 
-								"Hors de vr ! vr : " + str(round(vr, 2)))
-					return True
-		return False
-
-	def verifier_decalage_mm(self, _n, _p):
-		std_pondere = self.std20_regularise * 20
-		decalage = _p * (1 + std_pondere)
-
-		if self.candle.prix_courant < self.mm20 * (1 - decalage):
-			imprimer(Niveau.INFORMATION, 
-						"Hors d'envelope ! decalage : " + str(round(decalage, 3)))
-			return True
-		return False
-
-
-class Annuler:
-	def annuler_achats(self):
-		global uuid_achat
-
-		while True:
-			try:
-				for p in uuid_achat:
-					self.annuler_commande(p)
-				uuid_achat.clear()
-				return
-			except:
-				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande d'achat.")
-				time.sleep(TEMPS_EXCEPTION)
-			
-	def annuler_vente(self):
-		global uuid_vente
-		
-		while True:
-			try:
-				self.annuler_commande(uuid_vente)
-				uuid_vente = ''
-				return
-			except:
-				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande de vente.")
-				time.sleep(TEMPS_EXCEPTION)
-
-	def annuler_commande(self, _uuid):
-		global CLE_ACCES
+class Vendre:
+	def __init__(self, _symbol, _volume, _prix):
 		query = {
-			'uuid': _uuid,
+			'market': 'KRW-' + _symbol,
+			'side': 'ask',
+			'volume': _volume,
+			'price': _prix,
+			'ord_type': 'limit',
 		}
 		query_string = urlencode(query).encode()
 
@@ -348,229 +435,83 @@ class Annuler:
 		authorize_token = 'Bearer {}'.format(jwt_token)
 		headers = {"Authorization": authorize_token}
 
-		response = requests.delete(URL_SERVEUR + "/v1/order", params=query, headers=headers)
+		response = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
 		dict_response = json.loads(response.text)
-		#print(dict_response)
-			
 		time.sleep(TEMPS_DORMIR)
 		
+		global uuid_vente
+		uuid_vente = dict_response.get('uuid')
 
-class ExaminerCompte:
+
+class ControlerVente:
 	def __init__(self):
-		payload = {
-			'access_key': CLE_ACCES,
-			'nonce': str(uuid.uuid4()),
-		}
+		self.flag_commande_vendre = False
+		self.count_montant_insuffissant = 0
+	
+	def est_commande_vente_complete(self, _symbol):
+		ec = ExaminerCompte()
+		symbols = ec.recuperer_symbols()
 
-		jwt_token = jwt.encode(payload, CLE_SECRET)
-		authorize_token = 'Bearer {}'.format(jwt_token)
-		headers = {"Authorization": authorize_token}
+		if self.count_montant_insuffissant > 300:
+			imprimer(Niveau.AVERTISSEMENT, "Annuler le vente car le reste de demande de vente n'est pas conclu.")
+			self.count_montant_insuffissant = 0
+			self.flag_commande_vendre = False
+			return True
 
-		while(True):
+		for symbol in symbols:
 			try:
-				response = requests.get(URL_SERVEUR + "/v1/accounts", headers=headers)
-				self.dict_response = json.loads(response.text)
-				time.sleep(TEMPS_DORMIR)
+				balance, locked, avg_buy_price = ec.recuperer_symbol_info(symbol)
+				montant = (balance + locked) * avg_buy_price
 			except:
 				time.sleep(TEMPS_DORMIR)
-
-	def recuperer_solde_krw(self):
-		for mon_dict in self.dict_response:
-			if mon_dict.get('currency') == "KRW":
-				return float(mon_dict.get('balance'))
-		return 0
-
-	def recuperer_symbols(self):
-		symbols = []
-		for mon_dict in self.dict_response:
-			symbols.append(mon_dict.get('currency'))
-		return symbols
-
-	def recuperer_symbol_info(self, _symbol):
-		for mon_dict in self.dict_response:
-			if mon_dict.get('currency') == _symbol:
-				balance = float(mon_dict.get('balance'))
-				locked = float(mon_dict.get('locked'))
-				avg_buy_price = float(mon_dict.get('avg_buy_price'))
-
-				return balance, locked, avg_buy_price
-		return -1, -1, -1
-
-
-# flag_commande_vendre는 매도주문이 걸려 있는지 여부에 대한 플래그
-PRIX_MINIMUM_VENDU = 5000
-flag_commande_vendre = False
-count_montant_insuffissant = 0
-
-def est_commande_vente_complete(_symbol):
-	global flag_commande_vendre
-	global count_montant_insuffissant
-	ec = ExaminerCompte()
-	symbols = ec.recuperer_symbols()
-
-	if(count_montant_insuffissant > 300):
-		imprimer(Niveau.AVERTISSEMENT, "Annuler le vente car le reste de demande de vente n'est pas conclu.")
-		count_montant_insuffissant = 0
-		flag_commande_vendre = False
-		return True
-
-	for symbol in symbols:
-		try:
-			balance, locked, avg_buy_price = ec.recuperer_symbol_info(symbol)
-			montant = (balance + locked) * avg_buy_price
-		except:
-			time.sleep(TEMPS_DORMIR)
-			return False
-
-		if currency == _symbol:
-			if(montant < PRIX_MINIMUM_VENDU):
-				count_montant_insuffissant += 1
-			else:
-				count_montant_insuffissant = 0
-
-			if(balance + locked > 0.00001):
 				return False
-			else:
-				break
 
-	if(flag_commande_vendre == False):
-		return False
-	else:
-		flag_commande_vendre = False
-		return True
-	
-def vendre_biens(_symbol, _volume, _prix):
-	query = {
-		'market': 'KRW-' + _symbol,
-		'side': 'ask',
-		'volume': _volume,
-		'price': _prix,
-		'ord_type': 'limit',
-	}
-	query_string = urlencode(query).encode()
+			if symbol == _symbol:
+				if montant < 5000:
+					self.count_montant_insuffissant += 1
+				else:
+					self.count_montant_insuffissant = 0
 
-	m = hashlib.sha512()
-	m.update(query_string)
-	query_hash = m.hexdigest()
+				if balance + locked > 0.00001:
+					return False
+				else:
+					break
 
-	payload = {
-		'access_key': CLE_ACCES,
-		'nonce': str(uuid.uuid4()),
-		'query_hash': query_hash,
-		'query_hash_alg': 'SHA512',
-	}
-
-	jwt_token = jwt.encode(payload, CLE_SECRET)
-	authorize_token = 'Bearer {}'.format(jwt_token)
-	headers = {"Authorization": authorize_token}
-
-	response = requests.post(URL_SERVEUR + "/v1/orders", params=query, headers=headers)
-	dict_response = json.loads(response.text)
-	time.sleep(TEMPS_DORMIR)
-
-	global uuid_vente
-	uuid_vente = dict_response.get('uuid')
-	
-	#print(dict_response)
-	return dict_response
-
-def controler_achats(_symbol, _somme_totale): # 전부매집
-	try:
-		v = Verifier(_symbol)
-		if v.verfier_surete() and v.verifier_prix():
-			if v.verifier_bb_variable(20) or v.verifier_vr(20) or v.verifier_decalage_mm(20, 2):
-				a = Acheter(_symbol, v.candle.prix_courant, _somme_totale)
-				#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
-				#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-				#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
-				a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
-				#a.diviser_lapin(0.34, 16) # 토끼 매집
-			
-				imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + _symbol + '\'')
-				t = threading.Thread(target = winsound.Beep, args=(440, 500))
-				t.start()
-
-				return True
-	except Exception as e:
-		traceback.print_exc()
-	return False
-
-def controler_vente(_symbol, _somme_totale, _proportion_profit):
-	global flag_commande_vendre
-	global count_montant_insuffissant
-
-	try:
-		balance, locked, avg_buy_price = ExaminerCompte().recuperer_symbol_info(_symbol)
-		if(balance < 0):
+		if self.flag_commande_vendre == False:
 			return False
-		
-		montant = (balance + locked) * avg_buy_price
-		count_montant_insuffissant = 0
-
-		if(balance > 0.00001 and montant > 5000):
-			if uuid_vente != "":
-				Annuler().annuler_vente()
-				time.sleep(TEMPS_DORMIR)
-			time.sleep(TEMPS_DORMIR)
-
-			balance, locked, avg_buy_price = ExaminerCompte().recuperer_symbol_info(_symbol)
-			imprimer(Niveau.INFORMATION, "prix de moyenne d'acaht : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * _proportion_profit)))
-			vendre_biens(_symbol, balance + locked, tailler(avg_buy_price, -1 * proportion_vente))
-
-			flag_commande_vendre = True
-			return True
-		elif(montant >= PRIX_MINIMUM_VENDU):
-			return True
 		else:
-			return False	
-	except:
-		pass
-	return False
+			self.flag_commande_vendre = False
+			return True
 
-def obtenir_list_symbol():
-	list_symbol = []
-	with open("ban.txt", 'r') as f:
-		list_symbol_interdit = [line.strip() for line in f]
-	headers = {"Accept": "application/json"}
-	
-	try:
-		response = requests.request("GET", "https://api.upbit.com/v1/market/all?isDetails=false", headers=headers)
-		dict_response1 = json.loads(response.text)
-	except:
-		imprimer(Niveau.ERREUR, "Rate de recuperer la liste de symbols. (1)")
-		raise Exception('')
+	def vendre_a_plein(self, _symbol, _somme_totale, _proportion_profit):
+		try:
+			balance, locked, avg_buy_price = ExaminerCompte().recuperer_symbol_info(_symbol)
+			if balance < 0:
+				return False
+		
+			montant = (balance + locked) * avg_buy_price
+			self.count_montant_insuffissant = 0
 
-	for dr in tqdm(dict_response1, desc = 'Initialisation'):
-		market = dr.get('market')
-		if(market[:3] == "KRW" and market[4:] not in list_symbol_interdit):
-			try:
-				r = RecupererInfoCandle(market[4:])
-				time.sleep(0.054)
-			except:
-				imprimer(Niveau.ERREUR, "Rate de recuperer la liste de symbols. (2)")
-				raise Exception('RecupererInfoCandle')
+			if balance > 0.00001 and montant > 5000:
+				if uuid_vente != "":
+					Annuler().annuler_vente()
+					time.sleep(TEMPS_DORMIR)
+				time.sleep(TEMPS_DORMIR)
 
-			if 0.04 < r.prix_courant < 0.102 or 0.4 < r.prix_courant < 1.02 or 4 < r.prix_courant < 10.2 or \
-				40 < r.prix_courant < 102 or 400 < r.prix_courant < 1020 or 3200 < r.prix_courant:
-				acc_trade_price = 0
-				for i in range(80):
-					acc_trade_price += r.array_acc_trade_price[i]
+				balance, locked, avg_buy_price = ExaminerCompte().recuperer_symbol_info(_symbol)
+				imprimer(Niveau.INFORMATION, 
+							"prix de moyenne d'acaht : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * _proportion_profit)))
+				Vendre(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
 
-				if acc_trade_price > 300000000: #300백만
-					list_symbol.append(market[4:])
-
-	imprimer(Niveau.INFORMATION, 
-				"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
-				'[' + ', '.join(list_symbol) + ']')	
-	return list_symbol
-
-
-idx = 0
-def animater(_s):
-	global idx
-	animation = "|/-\\"
-	idx += 1
-	print(_s + animation[idx % len(animation)], end="\r")
+				self.flag_commande_vendre = True
+				return True
+			elif montant >= 5000:
+				return True
+			else:
+				return False	
+		except Exception as e:
+			traceback.print_exc()
+		return False
 
 
 if __name__=="__main__":
@@ -581,30 +522,54 @@ if __name__=="__main__":
 		imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
 
 	T_TIMEOUT = 30
-	TEMPS_REINITIAL = datetime.now()
+	TEMPS_INITIAL = datetime.now()
+	TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
 	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
 	parser.add_argument('-s', type=int, required=False, help='-s : La somme mise.')
 	args = parser.parse_args()
 	
 	Sp = S = ExaminerCompte().recuperer_solde_krw()
 	imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
-	list_symbol = obtenir_list_symbol()
 
 	Commission = 0.9995
-	if(args.s is not None):
-		if(args.s < 5000000):
+	if args.s is not None:
+		if args.s < 5000000:
 			imprimer(Niveau.ERREUR, "Vous devez saisir plus de 5,000,000 won.")
 			exit()
 		else:
 			S = int(args.s * Commission)
 	else:
 		S = int(S * Commission)
-
+	
 	nom_symbol = ''
+	idx = 0
+	animation = "|/-\\"
+
 	while True:
-		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 4): 
+		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 4):
 			TEMPS_REINITIAL = datetime.now()
-			list_symbol = obtenir_list_symbol()
+			list_symbol = []
+			with open("ban.txt", 'r') as f:
+				list_symbol_interdit = [line.strip() for line in f]
+
+			for dr in tqdm(RecupererCodeMarche().dict_response, desc = 'Initialisation'):
+				marche = dr.get('market')
+				if marche[:3] == "KRW" and marche[4:] not in list_symbol_interdit:
+					r = RecupererInfoCandle(marche[4:])
+					time.sleep(0.054)
+
+					if 0.04 < r.prix_courant < 0.102 or 0.4 < r.prix_courant < 1.02 or 4 < r.prix_courant < 10.2 or \
+						40 < r.prix_courant < 102 or 400 < r.prix_courant < 1020 or 3200 < r.prix_courant:
+						acc_trade_price = 0
+						for i in range(80):
+							acc_trade_price += r.array_acc_trade_price[i]
+
+						if acc_trade_price > 300000000: #300백만
+							list_symbol.append(marche[4:])
+
+			imprimer(Niveau.INFORMATION, 
+						"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
+						'[' + ', '.join(list_symbol) + ']')	
 
 			if nom_symbol != '' and nom_symbol in list_symbol:
 				list_symbol.remove(nom_symbol)
@@ -620,33 +585,51 @@ if __name__=="__main__":
 				for symbol in list_symbol:
 					if breakable: 
 						break
-					animater("En train de monitorer... ")
 					
-					if controler_achats(symbol, S):
-						nom_symbol = symbol
-						breakable = True
-					else:
-						time.sleep(0.0515)
+					idx += 1
+					print("En train de monitorer..." + animation[idx % len(animation)], end="\r")
+					
+					try:
+						v = Verifier(symbol)
+						if v.verfier_surete() and v.verifier_prix():
+							if v.verifier_bb_variable(20) or v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6):
+								a = Acheter(symbol, v.candle.prix_courant, S)
+								#a.diviser_lineaire(0.3333, 36, 10000000) # 선형 매집
+								#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
+								#a.diviser_parabolique(0.3333, 25) # 제1형 포물선 매집
+								a.diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
+								#a.diviser_lapin(0.34, 16) # 토끼 매집
+			
+								imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
+								t = threading.Thread(target = winsound.Beep, args=(440, 500))
+								t.start()
 
-			list_symbol.remove(nom_symbol)
-			list_symbol.insert(0, nom_symbol)
+								nom_symbol = symbol
+								breakable = True
+					except Exception as e:
+						traceback.print_exc()
+					time.sleep(0.0515)
+			
+			if nom_symbol != '' and nom_symbol in list_symbol:
+				list_symbol.remove(nom_symbol)
+				list_symbol.insert(0, nom_symbol)
 
+			cv = ControlerVente()
 			while True:
-				if est_commande_vente_complete(nom_symbol):
+				if cv.est_commande_vente_complete(nom_symbol):
 					imprimer(Niveau.SUCCES, "Vente achevee. Annuler le reste de demandes d'achat.")
 					break
 				elif fault >= T_TIMEOUT:
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
-				if controler_vente(nom_symbol, S, 0.34):
+				if cv.vendre_a_plein(nom_symbol, S, 0.35):
 					fault = 0
 				else:
 					fault += 1
 
 			Annuler().annuler_achats()
-
 			S = int(ExaminerCompte().recuperer_solde_krw())
-			interet = "Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')'
-			imprimer(Niveau.INFORMATION, interet)
+			imprimer(Niveau.INFORMATION,
+						"Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
 			S = int(S * Commission)
