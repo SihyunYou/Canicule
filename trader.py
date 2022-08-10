@@ -177,6 +177,7 @@ class Verifier:
 		z = (self.candle.prix_courant - self.mm20) / self.std20 
 		if self.std20_regularise >= 0.003 and z <= 0:
 			if z <= 144 * self.std20_regularise - 2.72:
+				self.z = z
 				imprimer(Niveau.INFORMATION, 
 							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
 							", std_regularise : " + str(round(self.std20_regularise, 5)))
@@ -607,13 +608,16 @@ if __name__=="__main__":
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
 							if v.verifier_bb_variable(20):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3333, 33, 10000000) # 선형 매집			
+								if v.z < -1.8:
+									Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3333, 33, 10000000) # 선형 매집			
+								else:
+									Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
 								verification_passable = True
 							elif v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6):
 								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
 								verification_passable = True
 							elif v.verifier_tendance_positive():
-								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique(0.35, 26) # 제1형 포물선 매집
+								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique(0.35, 27) # 제1형 포물선 매집
 								verification_passable = True
 							else:
 								verification_passable = False
@@ -645,7 +649,7 @@ if __name__=="__main__":
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
-				if cv.vendre_a_plein(nom_symbol, S, 0.35):
+				if cv.vendre_a_plein(nom_symbol, S, 0.32):
 					fault = 0
 				else:
 					fault += 1
