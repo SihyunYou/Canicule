@@ -218,13 +218,21 @@ class Verifier:
 
 
 	##### Deuxieme verification positive #####
-	def verifier_tendance_positive(self):
+	def verifier_tendance_positive(self, _z):
 		if self.std20_regularise >= 0.005:
 			mm60 = np.mean(np.array(self.candle.array_trade_price)[-60 : -1])
 			mm120 = np.mean(np.array(self.candle.array_trade_price)[-120 : -1])
 
 			if (self.candle.prix_courant - self.mm20) / self.mm20 < 1.24:
 				if self.mm20 > mm60 > mm120:
+					if self.candle.prix_courant > self.mm20 + self.std20 * _z:
+						self.p = 3
+					elif self.candle.prix_courant > self.mm20:
+						self.p = 2
+					elif self.candle.prix_courant > self.mm20 - self.std20 * _z:
+						self.p = 1
+					else:
+						self.p = 0					
 					imprimer(Niveau.INFORMATION,
 								"Tendance positive !")
 					return True
@@ -336,10 +344,11 @@ class Acheter:
 		self.S = _somme_totale
 		self.poids = 0.018
 
-	# lineaire -> 10 20 30 40 50 = 150
-	# parabolique I -> 10 20 40 70 110 = 250
-	# parabolique II -> 10 20 35 55 80 = 200 
-	# parabolique III -> 10 18 30 46 66 = 170
+	# lineaire -> 10 20 30 40 50 = 150 -> 6.6%
+	# parabolique III -> 10 18 30 46 66 = 170 -> 5.8%
+	# parabolique II -> 10 20 35 55 80 = 200 -> 5%
+	# parabolique I -> 10 20 40 70 110 = 250 -> 4%
+	# parabolique anormal -> 1 3 7 14 25 = 50 -> 2%
 
 	# 선형매집
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
@@ -395,9 +404,19 @@ class Acheter:
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
 
+	# 비전형 포물선매집
+	def diviser_parabolique_anormal(self, _pourcent_descente, _fois_decente):
+		s = (pow(_fois_decente, 4) + 2 * pow(_fois_decente, 3) + pow(_fois_decente, 2) + 10 * _fois_decente + 10) / 24
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			kn = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
+			qn = self.S * kn / s
+			self.acheter(pn, qn)
+
 	# 비전형 토끼매집
 	def diviser_lapin_anormal(self, _pourcent_descente, _fois_decente):
-		lapin = [1, 2, 3, 4, 6, 9, 13, 19, 28, 41, 60, 88, 129, 189, 277, 406, 595, 872, 1278, 1873] # 20
+		lapin = [1, 2, 3, 4, 6, 9, 13, 19, 28, 41, 60, 88, 129, 189, 277, 406, 595, 872, 1278, 1873, 2745, 4023, 5896, 8641] # 24
 		mon_lapin = lapin[:_fois_decente - 1]
 
 		for n in range(1, _fois_decente + 1):
@@ -636,15 +655,18 @@ if __name__=="__main__":
 						if v.verfier_surete() and v.verifier_prix():
 							if v.verifier_bb_variable(20):
 								if v.z < -1.96:
-									Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.31, 34, 10000000)		
+									Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 34, 10000000)		
 								else:
-									Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique3(0.32, 33)
+									Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique3(0.33, 31)
 								verification_passable = True
 							elif v.verifier_vr(20, 40):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.33, 31)
+								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.34, 30)
 								verification_passable = True
-							elif v.verifier_tendance_positive():
-								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique(0.34, 28)
+							elif v.verifier_tendance_positive(1.96):
+								if self.p <= 2:
+									Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique(0.35, 29)
+								elif self.p <= 3:
+									Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique_anormal(0.38, 26)
 								verification_passable = True
 							else:
 								verification_passable = False
@@ -676,7 +698,7 @@ if __name__=="__main__":
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
-				if cv.vendre_a_plein(nom_symbol, S, 0.32):
+				if cv.vendre_a_plein(nom_symbol, S, 0.3):
 					fault = 0
 				else:
 					fault += 1
