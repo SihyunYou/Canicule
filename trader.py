@@ -156,8 +156,8 @@ class Verifier:
 	def verfier_surete(self):
 		p = self.candle.array_trade_price[-60]
 		q = self.candle.prix_courant
-		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4 and \
-			self.candle.prix_courant < self.mm20 - self.std20 * 0: # 0.2533(10%), 0.5243(20%)
+		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4 and
+			self.candle.prix_courant < self.mm20 + self.std20 * 2: # 0.2533(10%), 0.5243(20%)
 			return True
 		return False
 
