@@ -339,7 +339,9 @@ class Acheter:
 	# lineaire -> 10 20 30 40 50 = 150
 	# parabolique I -> 10 20 40 70 110 = 250
 	# parabolique II -> 10 20 35 55 80 = 200 
+	# parabolique III -> 10 18 30 46 66 = 170
 
+	# 선형매집
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
 		r = _fois_decente
 		h = _difference
@@ -351,6 +353,7 @@ class Acheter:
 			qn = a * h * n / 100 + a
 			self.acheter(pn, qn)
 
+	# 지수매집
 	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant):
 		h = _fois_decente
 		r = _exposant
@@ -362,6 +365,7 @@ class Acheter:
 			qn = a * pow(r, n - 1)
 			self.acheter(pn, qn)
 
+	# 제1형 포물선매집
 	def diviser_parabolique(self, _pourcent_descente, _fois_decente):
 		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
 		for n in range(1, _fois_decente + 1):
@@ -371,6 +375,7 @@ class Acheter:
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
 
+	# 제2형 포물선매집
 	def diviser_parabolique2(self, _pourcent_descente, _fois_decente):
 		s = _fois_decente * (5 * pow(_fois_decente, 2) + 15 * _fois_decente + 40) / 6
 		for n in range(1, _fois_decente + 1):
@@ -379,7 +384,29 @@ class Acheter:
 			kn = 5 / 2 * pow(n, 2) + 5 / 2 * n + 5
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
+	
+	# 제3형 포물선매집
+	def diviser_parabolique3(self, _pourcent_descente, _fois_decente):
+		s = 2 * _fois_decente * (pow(_fois_decente, 2) + 3 * _fois_decente + 11) / 3
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			kn = 2 * pow(n, 2) + 2 * n + 6
+			qn = self.S * kn / s
+			self.acheter(pn, qn)
 
+	# 비전형 토끼매집
+	def diviser_lapin_anormal(self, _pourcent_descente, _fois_decente):
+		lapin = [1, 2, 3, 4, 6, 9, 13, 19, 28, 41, 60, 88, 129, 189, 277, 406, 595, 872, 1278, 1873] # 20
+		mon_lapin = lapin[:_fois_decente - 1]
+
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			qn = self.S * lapin[n - 1] / sum(mon_lapin)
+			self.acheter(pn, qn) 
+
+	# 토끼매집
 	def diviser_lapin(self, _pourcent_descente, _fois_decente):
 		lapin = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
 		mon_lapin = lapin[:_fois_decente - 1]
@@ -608,16 +635,16 @@ if __name__=="__main__":
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
 							if v.verifier_bb_variable(20):
-								if v.z < -1.8:
-									Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3333, 33, 10000000) # 선형 매집			
+								if v.z < -1.96:
+									Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.31, 34, 10000000)		
 								else:
-									Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
+									Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique3(0.32, 33)
 								verification_passable = True
-							elif v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
+							elif v.verifier_vr(20, 40):
+								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.33, 31)
 								verification_passable = True
 							elif v.verifier_tendance_positive():
-								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique(0.35, 27) # 제1형 포물선 매집
+								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique(0.34, 28)
 								verification_passable = True
 							else:
 								verification_passable = False
