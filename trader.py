@@ -156,8 +156,7 @@ class Verifier:
 	def verfier_surete(self):
 		p = self.candle.array_trade_price[-60]
 		q = self.candle.prix_courant
-		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4 and
-			self.candle.prix_courant < self.mm20 + self.std20 * 2: # 0.2533(10%), 0.5243(20%)
+		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4:
 			return True
 		return False
 
@@ -185,7 +184,7 @@ class Verifier:
 		return False
 
 	def verifier_vr(self, _n, _p):
-		if self.std20_regularise >= 0.005:
+		if self.std20_regularise >= 0.005 and self.candle.prix_courant < self.mm20:
 			h, b, e = 0, 0, 0
 			for i in range(-1 * _n, 0):
 				p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
@@ -204,16 +203,6 @@ class Verifier:
 					imprimer(Niveau.INFORMATION, 
 								"Hors de vr ! vr : " + str(round(vr, 2)))
 					return True
-		return False
-
-	def verifier_decalage_mm(self, _n, _p):
-		std_pondere = self.std20_regularise * 20
-		decalage = _p * (1 + std_pondere)
-
-		if self.candle.prix_courant < self.mm20 * (1 - decalage):
-			imprimer(Niveau.INFORMATION, 
-						"Hors d'envelope ! decalage : " + str(round(decalage, 3)))
-			return True
 		return False
 
 
