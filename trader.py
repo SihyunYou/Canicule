@@ -608,13 +608,13 @@ if __name__=="__main__":
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
 							if v.verifier_bb_variable(20):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3333, 35 + int(v.z * 4), 10000000) # 선형 매집			
+								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 36 + int(v.z * 4), 10000000) # 선형 매집			
 								verification_passable = True
-							elif v.verifier_vr(20, 40) or v.verifier_decalage_mm(20, 0.6):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3333, 33)
+							elif v.verifier_vr(20, 40):
+								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 33, 10000000)
 								verification_passable = True
-							elif v.verifier_tendance_positive():
-								Acheter(symbol, v.candle.prix_courant, S).diviser_parabolique2(0.3333, 27) # 제2형 포물선 매집
+							elif v.verifier_decalage_mm(20, 0.6):
+								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 33, 10000000)
 								verification_passable = True
 							else:
 								verification_passable = False
