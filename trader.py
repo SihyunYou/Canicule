@@ -199,10 +199,10 @@ class Verifier:
 			if b <= 0 and e <= 0:
 				return False
 			else:
-				vr = (h + e * 0.5) / (b + e * 0.5) * 100
-				if vr <= _p:
+				self.vr = (h + e * 0.5) / (b + e * 0.5) * 100
+				if self.vr <= _p:
 					imprimer(Niveau.INFORMATION, 
-								"Hors de vr ! vr : " + str(round(vr, 2)))
+								"Hors de vr ! vr : " + str(round(self.vr, 2)))
 					return True
 		return False
 
@@ -607,20 +607,15 @@ if __name__=="__main__":
 					try:
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
+							verification_passable = True
 							if v.verifier_bb_variable(20):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 36 + int(v.z * 4), 10000000) # 선형 매집			
-								verification_passable = True
+								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 36 + int(v.z * 4), 10000000)			
 							elif v.verifier_vr(20, 40):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 33, 10000000)
-								verification_passable = True
+								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 31 + int(v.vr / 7), 10000000)
 							elif v.verifier_decalage_mm(20, 0.6):
 								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 33, 10000000)
-								verification_passable = True
 							else:
 								verification_passable = False
-
-							#a.diviser_exposant(0.38, 29, 1.2) # 지수 매집
-							#a.diviser_lapin(0.34, 16) # 토끼 매집
 
 							if verification_passable:
 								nom_symbol = symbol
