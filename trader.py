@@ -169,7 +169,7 @@ class Verifier:
 		return False
 
 
-	##### Deuxieme verification negative #####
+	##### Deuxieme verification #####
 	def verifier_bb_variable(self, _n):
 		# x = std_regularise, y = z-note
 		# y <= 144x - 2.72
@@ -184,22 +184,26 @@ class Verifier:
 				return True
 		return False
 
+	def obtenir_vr(self, _n):
+		h, b, e = 0, 0, 0
+		for i in range(-1 * _n, 0):
+			p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
+			if p > 0:
+				h += self.candle.array_acc_trade_price[i]
+			elif p < 0:
+				b += self.candle.array_acc_trade_price[i]
+			else:
+				e += self.candle.array_acc_trade_price[i]
+
+		if b <= 0 and e <= 0:
+			return -1
+		else:
+			return (h + e * 0.5) / (b + e * 0.5) * 100
+
 	def verifier_vr(self, _n, _p):
 		if self.std20_regularise >= 0.005:
-			h, b, e = 0, 0, 0
-			for i in range(-1 * _n, 0):
-				p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
-				if p > 0:
-					h += self.candle.array_acc_trade_price[i]
-				elif p < 0:
-					b += self.candle.array_acc_trade_price[i]
-				else:
-					e += self.candle.array_acc_trade_price[i]
-
-			if b <= 0 and e <= 0:
-				return False
-			else:
-				self.vr = (h + e * 0.5) / (b + e * 0.5) * 100
+			self.vr = obtenir_vr(_n)
+			if self.vr != -1:
 				if self.vr <= _p:
 					imprimer(Niveau.INFORMATION, 
 								"Hors de vr ! vr : " + str(round(self.vr, 2)))
@@ -216,8 +220,6 @@ class Verifier:
 			return True
 		return False
 
-
-	##### Deuxieme verification positive #####
 	def verifier_tendance_positive(self):
 		if self.std20_regularise >= 0.005:
 			mm60 = np.mean(np.array(self.candle.array_trade_price)[-60 : -1])
@@ -227,6 +229,19 @@ class Verifier:
 				if self.mm20 > mm60 > mm120:
 					imprimer(Niveau.INFORMATION,
 								"Tendance positive !")
+					return True
+		return False
+
+	def verifier_rdivr_integre(self, _n):		
+		if self.std20_regularise > 0.003:
+			rdi = (self.candle.prix_courant - self.mm20) / self.std20 
+			vr = obtenir_vr(_n)
+			
+			if rdi < 0 and vr < 70:
+				self.cnv = abs(rdi) / vr * 100
+				if self.cnv > 20:
+					imprimer(Niveau.INFORMATION, 
+								"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)))
 					return True
 		return False
 
@@ -608,7 +623,9 @@ if __name__=="__main__":
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
-							if v.verifier_bb_variable(20):
+							if v.verifier_rdivr_integre(20):
+								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 37 - int(v.cnv / 4), 10000000)		
+							elif v.verifier_bb_variable(20):
 								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 36 + int(v.z * 4), 10000000)			
 							elif v.verifier_vr(20, 40):
 								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 31 + int(v.vr / 7), 10000000)
