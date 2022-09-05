@@ -234,15 +234,16 @@ class Verifier:
 
 	def verifier_rdivr_integre(self, _n):		
 		if self.std20_regularise > 0.003:
-			rdi = (self.candle.prix_courant - self.mm20) / self.std20 
-			vr = obtenir_vr(_n)
-			
-			if rdi < 0 and vr < 70:
-				self.cnv = abs(rdi) / vr * 100
-				if self.cnv > 20:
-					imprimer(Niveau.INFORMATION, 
-								"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)))
-					return True
+			rdi = (self.candle.prix_courant - self.mm20) / self.std20
+			if rdi <= 144 * self.std20_regularise - 2.72:
+				vr = obtenir_vr(_n)
+				if rdi < 0 and vr < 70:
+					self.cnv = abs(rdi) / vr * 100
+					print("self.cnv : ", self.cnv)
+					if self.cnv > 20:
+						imprimer(Niveau.INFORMATION, 
+									"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)))
+						return True
 		return False
 
 
