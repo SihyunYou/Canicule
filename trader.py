@@ -239,7 +239,6 @@ class Verifier:
 				vr = obtenir_vr(_n)
 				if rdi < 0 and vr < 70:
 					self.cnv = abs(rdi) / vr * 100
-					print("self.cnv : ", self.cnv)
 					if self.cnv > 20:
 						imprimer(Niveau.INFORMATION, 
 									"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)))
@@ -624,9 +623,9 @@ if __name__=="__main__":
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
-							if v.verifier_rdivr_integre(20):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 37 - int(v.cnv / 4), 10000000)		
-							elif v.verifier_bb_variable(20):
+							#if v.verifier_rdivr_integre(20):
+							#	Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 37 - int(v.cnv / 4), 10000000)		
+							if v.verifier_bb_variable(20):
 								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 36 + int(v.z * 4), 10000000)			
 							elif v.verifier_vr(20, 40):
 								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 31 + int(v.vr / 7), 10000000)
