@@ -395,6 +395,17 @@ class Acheter:
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
 
+	def diviser_nlogn(self, _pourcent_descente, _fois_decente):
+		s = 0
+		for n in range(1, _fois_decente + 1):
+			s += n ** math.log(n + 3)
+		
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			qn = self.S * (n ** math.log(n + 3)) / s
+			self.acheter(pn, qn) 
+
 	def diviser_lapin(self, _pourcent_descente, _fois_decente):
 		lapin = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
 		mon_lapin = lapin[:_fois_decente - 1]
@@ -626,11 +637,11 @@ if __name__=="__main__":
 							#if v.verifier_rdivr_integre(20):
 							#	Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 37 - int(v.cnv / 4), 10000000)		
 							if v.verifier_bb_variable(20):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 36 + int(v.z * 4), 10000000)			
+								Acheter(symbol, v.candle.prix_courant, S).diviser_nlogn(0.3, 36 + int(v.z * 4))			
 							elif v.verifier_vr(20, 40):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 31 + int(v.vr / 7), 10000000)
+								Acheter(symbol, v.candle.prix_courant, S).diviser_nlogn(0.3, 31 + int(v.vr / 7))
 							elif v.verifier_decalage_mm(20, 0.6):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 33, 10000000)
+								Acheter(symbol, v.candle.prix_courant, S).diviser_nlogn(0.3, 33, 10000000)
 							else:
 								verification_passable = False
 
