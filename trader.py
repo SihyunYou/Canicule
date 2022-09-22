@@ -202,7 +202,7 @@ class Verifier:
 
 	def verifier_vr(self, _n, _p):
 		if self.std20_regularise >= 0.005:
-			self.vr = obtenir_vr(_n)
+			self.vr = self.obtenir_vr(_n)
 			if self.vr != -1:
 				if self.vr <= _p:
 					imprimer(Niveau.INFORMATION, 
@@ -236,7 +236,7 @@ class Verifier:
 		if self.std20_regularise > 0.003:
 			rdi = (self.candle.prix_courant - self.mm20) / self.std20
 			if rdi <= 144 * self.std20_regularise - 2.72:
-				vr = obtenir_vr(_n)
+				vr = self.obtenir_vr(_n)
 				if rdi < 0 and vr < 70:
 					self.cnv = abs(rdi) / vr * 100
 					if self.cnv > 20:
@@ -398,12 +398,12 @@ class Acheter:
 	def diviser_nlogn(self, _pourcent_descente, _fois_decente):
 		s = 0
 		for n in range(1, _fois_decente + 1):
-			s += n ** math.log(n + 3)
+			s += n * math.log(n + 3)
 		
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = self.S * (n ** math.log(n + 3)) / s
+			qn = self.S * (n * math.log(n + 3)) / s
 			self.acheter(pn, qn) 
 
 	def diviser_lapin(self, _pourcent_descente, _fois_decente):
