@@ -1,3 +1,12 @@
+# © Copyright 2022 La Nouvelle Finance Inc. All rights reserved.
+# Bienvenue ! Moi je suis P.D.G. de La Nouvelle Finance et developpeur de cet enfant.  
+# Ce script est dependant des politiques de API de UPBIT.
+# Attention ! Si vous lisez ce script maintenant, ca veut dire qu'il est experimental, pas operationnel.
+# Pourtant, y a un cle pour que tu puisses pratiquement l'utiliser. Mais ca peut te demander pas mal de temps pour le chercher.
+# Bien entendu, je connais le cle. Et vous avez besoin de conclure un contrat avec moi pour user de mon code. 
+# N'utilisez pas le source code experimental sans permission du developpeur. Ca pourra merder ton compte.  
+# Si vous avez des questions, adressez-vous a caesar2937@gmail.com
+
 import requests
 import json
 import math
@@ -17,6 +26,7 @@ from datetime import datetime
 from datetime import timedelta
 from colorama import init, Fore, Back, Style
 import traceback
+from enum import Enum
 
 init(autoreset = True)
 
@@ -238,8 +248,8 @@ class Verifier:
 			if rdi <= 144 * self.std20_regularise - 2.72:
 				vr = self.obtenir_vr(_n)
 				if rdi < 0 and vr < 70:
-					self.cnv = abs(rdi) / vr * 100
-					if self.cnv > 20:
+					self.cnv = abs(rdi + 1) / vr * 100
+					if self.cnv > 10:
 						imprimer(Niveau.INFORMATION, 
 									"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)))
 						return True
@@ -345,15 +355,33 @@ class ExaminerCompte:
 
 
 class Acheter:
-	def __init__(self, _symbol, _prix_courant, _somme_totale):
+	def __init__(self, _symbol, _prix_courant, _somme_totale, _poids):
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
 		self.S = _somme_totale
-		self.poids = 0.018
+		self.poids = _poids
 
-	# lineaire -> 10 20 30 40 50 = 150
-	# parabolique I -> 10 20 40 70 110 = 250
-	# parabolique II -> 10 20 35 55 80 = 200 
+	class Diviser(Enum):
+		LINEAIRE = 1
+		PARABOLIQUE_II = 2
+		PARABOLIQUE_I = 3
+		LOG_LINEAIRE = 4
+		EXPOSANT = 5
+		LAPIN = 6
+
+	def diviser_integre(self, _pourcent_descente, _fois_decente, _facon):
+		if Diviser.LINEAIRE == _facon:
+			self.diviser_lineaire(_pourcent_descente, _fois_decente, 16777216)
+		elif Diviser.PARABOLIQUE_II == _facon:
+			self.diviser_parabolique2(_pourcent_descente, _fois_decente)
+		elif Diviser.PARABOLIQUE_I == _facon:
+			self.diviser_parabolique(_pourcent_descente, _fois_decente)
+		elif Diviser.LOG_LINEAIRE == _facon:
+			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 2)
+		elif Diviser.EXPOSANT == _facon:
+			self.diviser_exposant(_pourcent_descente, _fois_decente, 1.2)
+		elif Diviser.LAPIN == _facon:
+			self.diviser_lapin(_pourcent_descente, _fois_decente)
 
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
 		r = _fois_decente
@@ -395,15 +423,15 @@ class Acheter:
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
 
-	def diviser_nlogn(self, _pourcent_descente, _fois_decente):
+	def diviser_log_lineaire(self, _pourcent_descente, _fois_decente, _poids):
 		s = 0
 		for n in range(1, _fois_decente + 1):
-			s += n * math.log(n + 3)
+			s += n * math.log(n + _poids)
 		
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = self.S * (n * math.log(n + 3)) / s
+			qn = self.S * (n * math.log(n + _poids)) / s
 			self.acheter(pn, qn) 
 
 	def diviser_lapin(self, _pourcent_descente, _fois_decente):
@@ -541,7 +569,7 @@ class ControlerVente:
 
 				balance, locked, avg_buy_price = ExaminerCompte().recuperer_symbol_info(_symbol)
 				imprimer(Niveau.INFORMATION, 
-							"prix de moyenne d'acaht : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * _proportion_profit)))
+							"prix de moyenne d'achat : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * _proportion_profit)))
 				Vendre(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
 
 				self.flag_commande_vendre = True
@@ -566,7 +594,11 @@ if __name__=="__main__":
 	TEMPS_INITIAL = datetime.now()
 	TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
 	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
-	parser.add_argument('-s', type=int, required=False, help='-s : La somme mise.')
+	parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
+	parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
+	parser.add_argument('-p', type=float, required=False, help="-f : le poids de division")
+	parser.add_argument('-d', type=float, required=False, help="-f : la proportion divise")
+	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
 	args = parser.parse_args()
 	
 	Sp = S = ExaminerCompte().recuperer_solde_krw()
@@ -574,13 +606,33 @@ if __name__=="__main__":
 
 	Commission = 0.9995
 	if args.s is not None:
-		if args.s < 5000000:
-			imprimer(Niveau.ERREUR, "Vous devez saisir plus de 5,000,000 won.")
+		if args.s < 10000000:
+			imprimer(Niveau.ERREUR, "Vous devez saisir plus de 10,000,000 won.")
 			exit()
 		else:
 			S = int(args.s * Commission)
 	else:
 		S = int(S * Commission)
+	
+	if args.f is not None:
+		__facon_achat = args.f
+	else:
+		__facon_achat = Acheter.Diviser.LOG_LINEAIRE
+
+	if args.p is not None:
+		__poids_divise = args.p
+	else:
+		__poids_divise = 0.018
+
+	if args.d is not None:
+		__proportion_divise = args.d
+	else:
+		__proportion_divise = 0.3
+
+	if args.v is not None:
+		__position_vente = args.v
+	else:
+		__position_vente = 0.32
 	
 	nom_symbol = ''
 	idx = 0
@@ -634,18 +686,21 @@ if __name__=="__main__":
 						v = Verifier(symbol)
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
-							#if v.verifier_rdivr_integre(20):
-							#	Acheter(symbol, v.candle.prix_courant, S).diviser_lineaire(0.3, 37 - int(v.cnv / 4), 10000000)		
+							if v.verifier_rdivr_integre(20):
+								t = 37 - int(v.cnv / 4)	
 							if v.verifier_bb_variable(20):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_nlogn(0.3, 36 + int(v.z * 4))			
+								t = 36 + int(v.z * 4)
 							elif v.verifier_vr(20, 40):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_nlogn(0.3, 31 + int(v.vr / 7))
+								t = 31 + int(v.vr / 7)
 							elif v.verifier_decalage_mm(20, 0.6):
-								Acheter(symbol, v.candle.prix_courant, S).diviser_nlogn(0.3, 33, 10000000)
+								t = 33
 							else:
 								verification_passable = False
-
+								
 							if verification_passable:
+								a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
+								a.diviser_integre(__proportion_divise, t, __facon_achat)
+								
 								nom_symbol = symbol
 								breakable = True
 								imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
@@ -669,7 +724,7 @@ if __name__=="__main__":
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
-				if cv.vendre_a_plein(nom_symbol, S, 0.32):
+				if cv.vendre_a_plein(nom_symbol, S, __position_vente):
 					fault = 0
 				else:
 					fault += 1
