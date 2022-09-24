@@ -2,7 +2,7 @@
 # Bienvenue ! Moi je suis P.D.G. de La Nouvelle Finance et developpeur de cet enfant.  
 # Ce script est dependant des politiques de API de UPBIT.
 # Attention ! Si vous lisez ce script maintenant, ca veut dire qu'il est experimental, pas operationnel.
-# Pourtant, y a un cle pour que tu puisses pratiquement l'utiliser. Mais ca peut te demander pas mal de temps pour le chercher.
+# Pourtant, il y a un cle pour que tu puisses pratiquement l'utiliser. Mais ca peut te demander pas mal de temps pour le chercher.
 # Bien entendu, je connais le cle. Et vous avez besoin de conclure un contrat avec moi pour user de mon code. 
 # N'utilisez pas le source code experimental sans permission du developpeur. Ca pourra merder ton compte.  
 # Si vous avez des questions, adressez-vous a caesar2937@gmail.com
@@ -181,7 +181,7 @@ class Verifier:
 
 	##### Deuxieme verification #####
 	def verifier_bb_variable(self, _n):
-		# x = std_regularise, y = z-note
+		# x = std_regularise(RSD), y = z-note(RID)
 		# y <= 144x - 2.72
 
 		z = (self.candle.prix_courant - self.mm20) / self.std20 
@@ -282,6 +282,40 @@ class Annuler:
 				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande de vente.")
 				time.sleep(TEMPS_EXCEPTION)
 
+	def annuler_precommandes(self):
+		# Repercurer la liste de commadnes
+		params = {
+			'state': 'wait'
+		}
+		query_string = unquote(urlencode(params, doseq=True)).encode("utf-8")
+
+		m = hashlib.sha512()
+		m.update(query_string)
+		query_hash = m.hexdigest()
+
+		payload = {
+			'access_key': CLE_ACCES,
+			'nonce': str(uuid.uuid4()),
+			'query_hash': query_hash,
+			'query_hash_alg': 'SHA512',
+		}
+
+		jwt_token = jwt.encode(payload, CLE_SECRET)
+		authorization = 'Bearer {}'.format(jwt_token)
+		headers = {
+		  'Authorization': authorization,
+		}
+
+		response = requests.get(server_url + '/v1/orders', params=params, headers=headers)
+		dict_response = json.loads(response.text)
+		print(dict_response)
+			
+		time.sleep(TEMPS_DORMIR)
+
+		# Puis, annuler tous les commandes
+		for mon_dict in dict_response:
+			pass
+
 	def annuler_commande(self, _uuid):
 		global CLE_ACCES
 		query = {
@@ -346,11 +380,11 @@ class ExaminerCompte:
 	def recuperer_symbol_info(self, _symbol):
 		for mon_dict in self.dict_response:
 			if mon_dict.get('currency') == _symbol:
-				balance = float(mon_dict.get('balance'))
-				locked = float(mon_dict.get('locked'))
-				avg_buy_price = float(mon_dict.get('avg_buy_price'))
+				solde = float(mon_dict.get('balance'))
+				ferme = float(mon_dict.get('locked'))
+				prix_moyenne_achat = float(mon_dict.get('avg_buy_price'))
 
-				return balance, locked, avg_buy_price
+				return solde, ferme, prix_moyenne_achat
 		return -1, -1, -1
 
 
@@ -529,8 +563,8 @@ class ControlerVente:
 
 		for symbol in symbols:
 			try:
-				balance, locked, avg_buy_price = ec.recuperer_symbol_info(symbol)
-				montant = (balance + locked) * avg_buy_price
+				solde, ferme, prix_moyenne_achat = ec.recuperer_symbol_info(symbol)
+				montant = (solde + ferme) * prix_moyenne_achat
 			except:
 				time.sleep(TEMPS_DORMIR)
 				return False
@@ -541,7 +575,7 @@ class ControlerVente:
 				else:
 					self.count_montant_insuffissant = 0
 
-				if balance + locked > 0.00001:
+				if solde + ferme > 0.00001:
 					return False
 				else:
 					break
@@ -554,23 +588,24 @@ class ControlerVente:
 
 	def vendre_a_plein(self, _symbol, _somme_totale, _proportion_profit):
 		try:
-			balance, locked, avg_buy_price = ExaminerCompte().recuperer_symbol_info(_symbol)
-			if balance < 0:
+			# solde, ferme <- volume
+			solde, ferme, prix_moyenne_achat = ExaminerCompte().recuperer_symbol_info(_symbol)
+			if solde < 0:
 				return False
 		
-			montant = (balance + locked) * avg_buy_price
+			montant = (solde + ferme) * prix_moyenne_achat
 			self.count_montant_insuffissant = 0
 
-			if balance > 0.00001 and montant > 5000:
-				if uuid_vente != "":
+			if solde > 1000 / prix_moyenne_achat and montant > 5000: # Yay, ca pourra reperer la derniere erreur !
+				if uuid_vente != '':
 					Annuler().annuler_vente()
 					time.sleep(TEMPS_DORMIR)
 				time.sleep(TEMPS_DORMIR)
 
-				balance, locked, avg_buy_price = ExaminerCompte().recuperer_symbol_info(_symbol)
+				solde, ferme, prix_moyenne_achat = ExaminerCompte().recuperer_symbol_info(_symbol)
 				imprimer(Niveau.INFORMATION, 
-							"prix de moyenne d'achat : " + str(avg_buy_price) + ", position de vente : " + str(tailler(avg_buy_price, -1 * _proportion_profit)))
-				Vendre(_symbol, balance + locked, tailler(avg_buy_price, -1 * _proportion_profit))
+							"prix de moyenne d'achat : " + str(prix_moyenne_achat) + ", position de vente : " + str(tailler(prix_moyenne_achat, -1 * _proportion_profit)))
+				Vendre(_symbol, solde + ferme, tailler(prix_moyenne_achat, -1 * _proportion_profit))
 
 				self.flag_commande_vendre = True
 				return True
@@ -590,15 +625,16 @@ if __name__=="__main__":
 		imprimer(Niveau.INFORMATION, "CLE_ACCES : " + CLE_ACCES)
 		imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
 
-	T_TIMEOUT = 30
 	TEMPS_INITIAL = datetime.now()
 	TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
+
 	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
 	parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
 	parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
 	parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
 	parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
 	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
+	parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout(seconds)")
 	args = parser.parse_args()
 	
 	Sp = S = ExaminerCompte().recuperer_solde_krw()
@@ -629,6 +665,11 @@ if __name__=="__main__":
 	else:
 		__proportion_divise = 0.3
 
+	if args.t is not None:
+		__temps_timeout = args.t
+	else:
+		__temps_timeout = 30
+
 	if args.v is not None:
 		__position_vente = args.v
 	else:
@@ -637,6 +678,8 @@ if __name__=="__main__":
 	nom_symbol = ''
 	idx = 0
 	animation = "|/-\\"
+
+	Annuler().annuler_precommandes()
 
 	while True:
 		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 4):
@@ -657,7 +700,7 @@ if __name__=="__main__":
 						for i in range(80):
 							acc_trade_price += r.array_acc_trade_price[i]
 
-						if acc_trade_price > 300000000: #300백만
+						if acc_trade_price > 300000000: # 300 million
 							list_symbol.append(marche[4:])
 
 			imprimer(Niveau.INFORMATION, 
@@ -720,7 +763,7 @@ if __name__=="__main__":
 				if cv.est_commande_vente_complete(nom_symbol):
 					imprimer(Niveau.SUCCES, "Vente achevee. Annuler le reste de demandes d'achat.")
 					break
-				elif fault >= T_TIMEOUT:
+				elif fault >= __temps_timeout:
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
