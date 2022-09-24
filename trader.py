@@ -370,17 +370,17 @@ class Acheter:
 		LAPIN = 6
 
 	def diviser_integre(self, _pourcent_descente, _fois_decente, _facon):
-		if Diviser.LINEAIRE == _facon:
+		if self.Diviser.LINEAIRE == _facon:
 			self.diviser_lineaire(_pourcent_descente, _fois_decente, 16777216)
-		elif Diviser.PARABOLIQUE_II == _facon:
+		elif self.Diviser.PARABOLIQUE_II == _facon:
 			self.diviser_parabolique2(_pourcent_descente, _fois_decente)
-		elif Diviser.PARABOLIQUE_I == _facon:
+		elif self.Diviser.PARABOLIQUE_I == _facon:
 			self.diviser_parabolique(_pourcent_descente, _fois_decente)
-		elif Diviser.LOG_LINEAIRE == _facon:
-			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 2)
-		elif Diviser.EXPOSANT == _facon:
+		elif self.Diviser.LOG_LINEAIRE == _facon:
+			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 3)
+		elif self.Diviser.EXPOSANT == _facon:
 			self.diviser_exposant(_pourcent_descente, _fois_decente, 1.2)
-		elif Diviser.LAPIN == _facon:
+		elif self.Diviser.LAPIN == _facon:
 			self.diviser_lapin(_pourcent_descente, _fois_decente)
 
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
@@ -596,8 +596,8 @@ if __name__=="__main__":
 	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
 	parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
 	parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
-	parser.add_argument('-p', type=float, required=False, help="-f : le poids de division")
-	parser.add_argument('-d', type=float, required=False, help="-f : la proportion divise")
+	parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
+	parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
 	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
 	args = parser.parse_args()
 	
