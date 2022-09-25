@@ -36,7 +36,7 @@ URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
 CLE_SECRET = ''
 URL_SERVEUR = 'https://api.upbit.com'
-
+Sp = 0
 uuid_achat = []
 uuid_vente = ''
 
@@ -47,10 +47,21 @@ class Niveau:
 	EXCEPTION = Fore.LIGHTYELLOW_EX + Style.BRIGHT
 	ERREUR = Fore.LIGHTWHITE_EX + Back.LIGHTRED_EX + Style.BRIGHT
 
+
+if not os.path.exists('log'):
+	os.makedirs('log')
+NOM_FICHE_LOG = 'log\\' + datetime.now().strftime('%m.%d.%X').replace(':', '') + '.txt'
+
 def imprimer(_niveau, _s):
 	niveau_datetime = Fore.MAGENTA + Style.NORMAL
-	print(niveau_datetime + '[' + datetime.now().strftime('%m/%d %X') + '] ' + \
-		_niveau + _s)
+	t = '[' + datetime.now().strftime('%m/%d %X') + '] '
+	print(niveau_datetime + t + _niveau + _s)
+	with open(NOM_FICHE_LOG, 'a') as f:
+		f.write(t + _s + '\n')
+
+def logger_masse(_n):
+	with open("log/masse.txt", 'w') as f:
+		f.write(str(int(_n)) + ',' + str(int(Sp))) 
 
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
@@ -125,13 +136,13 @@ class RecupererCodeMarche:
 
 
 class RecupererInfoCandle:
-	def __recuperer_array(self, _s, _n):
+	def __recuperer_array(self, _s : str, _n : int):
 		arr = np.zeros(_n)
 		for i in range(_n):
 			arr[_n - i - 1] = self.dict_response[i].get(_s)
 		return arr
 
-	def __init__(self, _symbol):
+	def __init__(self, _symbol : str):
 		comte = 200
 		querystring = {
 			"market" : "KRW-" + _symbol,
@@ -141,7 +152,9 @@ class RecupererInfoCandle:
 		try:
 			response = requests.request("GET", URL_CANDLE, params=querystring)
 			self.dict_response = json.loads(response.text)
+
 			#print("심볼 : " + _symbol)
+			time.sleep(0.052)
 		except:
 			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
 			raise Exception("RecupererInfoCandle")
@@ -247,10 +260,12 @@ class Verifier:
 			if rdi <= 144 * self.std20_regularise - 2.72:
 				vr = self.obtenir_vr(_n)
 				if rdi < 0 and vr < 70:
-					self.cnv = abs(rdi + 1) / vr * 1000
+					self.cnv = abs(rdi - 1) / vr * 500
 					if self.cnv > 100:
 						imprimer(Niveau.INFORMATION, 
-									"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)))
+									"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)) +
+									", rdi : " + str(round(rdi, 2)) +
+									", vr : " + str(round(vr, 2)))
 						return True
 		return False
 
@@ -281,11 +296,11 @@ class Annuler:
 				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande de vente.")
 				time.sleep(TEMPS_EXCEPTION)
 
-	# @ _type -> int
+	# @ _type
 	# 1 : Annuler tous les commandes d'achat
 	# 2 : Annuler tous les commandes de vente
 	# 3 : Annuler tous les commandes d'achat et de vente
-	def annuler_precommandes(self, _type):
+	def annuler_precommandes(self, _type : int):
 		params = {
 			'state': 'wait'
 		}
@@ -375,10 +390,19 @@ class ExaminerCompte:
 			except:
 				time.sleep(TEMPS_DORMIR)
 
-	def recuperer_solde_krw(self):
+	# @ _type -> int
+	# 1 : solde(disponible)
+	# 2 : ferme
+	# 3 : solde + ferme
+	def recuperer_solde_krw(self, _type = 1):
 		for mon_dict in self.dict_response:
 			if mon_dict.get('currency') == "KRW":
-				return float(mon_dict.get('balance'))
+				if 1 == _type:
+					return float(mon_dict.get('balance'))
+				elif 2 == _type:
+					return float(mon_dict.get('locked'))
+				elif 3 == _type:
+					return float(mon_dict.get('balance')) + float(mon_dict.get('locked'))
 		return 0
 
 	def recuperer_symbols(self):
@@ -414,20 +438,20 @@ class Acheter:
 		EXPOSANT = 6
 		LAPIN = 7
 
-	def diviser_integre(self, _pourcent_descente, _fois_decente, _facon):
-		if self.Diviser.LINEAIRE == _facon: # 선형 : n
+	def diviser_integre(self, _pourcent_descente : float, _fois_decente : int, _facon : int):
+		if self.Diviser.LINEAIRE == _facon: # n
 			self.diviser_lineaire(_pourcent_descente, _fois_decente, 16777216)
-		elif self.Diviser.LOG_LINEAIRE_II == _facon: # 제2형 선형로그 : n * log(n + 3)
+		elif self.Diviser.LOG_LINEAIRE_II == _facon: # n * log(n + 3)
 			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 3)
-		elif self.Diviser.LOG_LINEAIRE_I == _facon: # 제1형 선형로그 : n * log(n + 2)
+		elif self.Diviser.LOG_LINEAIRE_I == _facon: # n * log(n + 2)
 			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 2)
-		elif self.Diviser.PARABOLIQUE_II == _facon: # 제2형 포물선 : 2.5n^2 + 2.5n + 5
+		elif self.Diviser.PARABOLIQUE_II == _facon: # 2.5n^2 + 2.5n + 5
 			self.diviser_parabolique2(_pourcent_descente, _fois_decente)
-		elif self.Diviser.PARABOLIQUE_I == _facon: # 제1형 포물선 : n^2 - 0.5n + 1
+		elif self.Diviser.PARABOLIQUE_I == _facon: # n^2 - 0.5n + 1
 			self.diviser_parabolique(_pourcent_descente, _fois_decente)
-		elif self.Diviser.EXPOSANT == _facon: # 지수 : 1.2^n
+		elif self.Diviser.EXPOSANT == _facon: # 1.2^n
 			self.diviser_exposant(_pourcent_descente, _fois_decente, 1.2)
-		elif self.Diviser.LAPIN == _facon: # 토끼(변형 피보나치)
+		elif self.Diviser.LAPIN == _facon: # fibonacci varie
 			self.diviser_lapin(_pourcent_descente, _fois_decente)
 
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
@@ -526,7 +550,7 @@ class Acheter:
 
 
 class Vendre:
-	def __init__(self, _symbol, _volume, _prix):
+	def __init__(self, _symbol : str, _volume : float, _prix : float):
 		query = {
 			'market': 'KRW-' + _symbol,
 			'side': 'ask',
@@ -563,8 +587,9 @@ class ControlerVente:
 	def __init__(self):
 		self.flag_commande_vendre = False
 		self.count_montant_insuffissant = 0
-	
-	def est_commande_vente_complete(self, _symbol):
+		self.t = 0
+
+	def est_commande_vente_complete(self, _symbol : str):
 		ec = ExaminerCompte()
 		symbols = ec.recuperer_symbols()
 
@@ -599,13 +624,19 @@ class ControlerVente:
 			self.flag_commande_vendre = False
 			return True
 
-	def vendre_a_plein(self, _symbol, _somme_totale, _proportion_profit):
+	def vendre_a_plein(self, _symbol : str, _proportion_profit : float):
 		try:
 			# solde, ferme <- volume
 			solde, ferme, prix_moyenne_achat = ExaminerCompte().recuperer_symbol_info(_symbol)
 			if solde < 0:
 				return False
-		
+			
+			if self.t % 10 == 0:	
+				masse_realisee = ExaminerCompte().recuperer_solde_krw(3)
+				masse_irrealisee = (solde + ferme) * RecupererInfoCandle(_symbol).prix_courant
+				logger_masse(int(masse_realisee + masse_irrealisee))
+			self.t += 1
+
 			montant = (solde + ferme) * prix_moyenne_achat
 			self.count_montant_insuffissant = 0
 
@@ -640,6 +671,15 @@ if __name__=="__main__":
 
 	TEMPS_INITIAL = datetime.now()
 	TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
+	Commission = 0.9995
+	nom_symbol = ''
+	idx = 0
+	animation = "|/-\\"
+
+	Annuler().annuler_precommandes(1)
+	Sp = S = ExaminerCompte().recuperer_solde_krw()
+	imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
+	logger_masse(S)
 
 	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
 	parser.add_argument('-a', type=int, required=False, help="-a : le type d'annulation de precommandes")
@@ -653,15 +693,6 @@ if __name__=="__main__":
 	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
 	args = parser.parse_args()
 	
-	Sp = S = ExaminerCompte().recuperer_solde_krw()
-	imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
-
-	Commission = 0.9995
-	nom_symbol = ''
-	idx = 0
-	animation = "|/-\\"
-
-
 	if args.a is not None:
 		__facon_achat = args.a
 	else:
@@ -710,9 +741,8 @@ if __name__=="__main__":
 		__position_vente = args.v
 	else:
 		__position_vente = 0.32
-	
 
-	Annuler().annuler_precommandes(1)
+
 	while True:
 		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
 			TEMPS_REINITIAL = datetime.now()
@@ -729,7 +759,6 @@ if __name__=="__main__":
 
 			for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
 				r = RecupererInfoCandle(symbol)
-				time.sleep(0.054)
 
 				if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
 					2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
@@ -768,9 +797,9 @@ if __name__=="__main__":
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
 							if v.verifier_rdivr_integre(20):
-								t = 36 - int(v.cnv / 25)
-							if v.verifier_bb_variable(20):
-								t = 36 + int(v.z * 1.8)
+								t = 36 - int((v.cnv - 100) / 20)
+							elif v.verifier_bb_variable(20):
+								t = 36 + int(v.z * 1.5)
 							elif v.verifier_vr(20, 40):
 								t = 30 + int(v.vr / 6)
 							elif v.verifier_decalage_mm(20, 0.6):
@@ -788,9 +817,8 @@ if __name__=="__main__":
 							
 								t = threading.Thread(target = winsound.Beep, args=(440, 500))
 								t.start()
-					except Exception as e:
+					except Exception:
 						traceback.print_exc()
-					time.sleep(0.0515)
 			
 			if nom_symbol != '' and nom_symbol in list_symbols:
 				list_symbols.remove(nom_symbol)
@@ -805,7 +833,7 @@ if __name__=="__main__":
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
-				if cv.vendre_a_plein(nom_symbol, S, __position_vente):
+				if cv.vendre_a_plein(nom_symbol, __position_vente):
 					fault = 0
 				else:
 					fault += 1
@@ -814,4 +842,5 @@ if __name__=="__main__":
 			S = int(ExaminerCompte().recuperer_solde_krw())
 			imprimer(Niveau.INFORMATION,
 						"Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
+			logger_masse(S)
 			S = int(S * Commission)

@@ -3,3 +3,4 @@ profit_*.txt
 *.exe
 __pycache__
 zNex~*
+log/
