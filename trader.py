@@ -15,15 +15,14 @@ import os
 import jwt
 import uuid
 import hashlib
-from urllib.parse import urlencode
+from urllib.parse import urlencode, unquote
 import winsound
 import argparse
 import numpy as np
 import threading
 from tqdm import tqdm
 import datetime
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 from colorama import init, Fore, Back, Style
 import traceback
 from enum import Enum
@@ -172,9 +171,9 @@ class Verifier:
 		return False
 
 	def verifier_prix(self):
-		if 0.048 < self.candle.prix_courant < 0.0995 or 0.48 < self.candle.prix_courant < 0.995 or \
-			4.8 < self.candle.prix_courant < 9.95 or 48 < self.candle.prix_courant < 99.5 or \
-			480 < self.candle.prix_courant < 995 or 3600 < self.candle.prix_courant:
+		if 0.03 < self.candle.prix_courant < 0.1 or 0.3 < self.candle.prix_courant < 1 or \
+			3 < self.candle.prix_courant < 10 or 30 < self.candle.prix_courant < 100 or \
+			300 < self.candle.prix_courant < 1000 or 1800 < self.candle.prix_courant:
 			return True
 		return False
 
@@ -282,8 +281,11 @@ class Annuler:
 				imprimer(Niveau.EXCEPTION, "Rate d'annuler le demande de vente.")
 				time.sleep(TEMPS_EXCEPTION)
 
-	def annuler_precommandes(self):
-		# Repercurer la liste de commadnes
+	# @ _type -> int
+	# 1 : Annuler tous les commandes d'achat
+	# 2 : Annuler tous les commandes de vente
+	# 3 : Annuler tous les commandes d'achat et de vente
+	def annuler_precommandes(self, _type):
 		params = {
 			'state': 'wait'
 		}
@@ -306,22 +308,30 @@ class Annuler:
 		  'Authorization': authorization,
 		}
 
-		response = requests.get(server_url + '/v1/orders', params=params, headers=headers)
+		response = requests.get(URL_SERVEUR + '/v1/orders', params=params, headers=headers)
 		dict_response = json.loads(response.text)
-		print(dict_response)
+		#print(dict_response)
 			
 		time.sleep(TEMPS_DORMIR)
 
-		# Puis, annuler tous les commandes
-		for mon_dict in dict_response:
-			pass
+		if 1 == _type:
+			for mon_dict in dict_response:
+				if mon_dict.get('side') == 'bid':
+					self.annuler_commande(mon_dict.get('uuid'))
+		elif 2 == _type:
+			for mon_dict in dict_response:
+				if mon_dict.get('side') == 'ask':
+					self.annuler_commande(mon_dict.get('uuid'))
+		elif 3 == _type:
+			for mon_dict in dict_response:
+				self.annuler_commande(mon_dict.get('uuid'))
 
 	def annuler_commande(self, _uuid):
 		global CLE_ACCES
-		query = {
+		params = {
 			'uuid': _uuid,
 		}
-		query_string = urlencode(query).encode()
+		query_string = unquote(urlencode(params, doseq=True)).encode("utf-8")
 
 		m = hashlib.sha512()
 		m.update(query_string)
@@ -338,7 +348,7 @@ class Annuler:
 		authorize_token = 'Bearer {}'.format(jwt_token)
 		headers = {"Authorization": authorize_token}
 
-		response = requests.delete(URL_SERVEUR + "/v1/order", params=query, headers=headers)
+		response = requests.delete(URL_SERVEUR + "/v1/order", params=params, headers=headers)
 		dict_response = json.loads(response.text)
 		#print(dict_response)
 			
@@ -635,12 +645,17 @@ if __name__=="__main__":
 	parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
 	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
 	parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout(seconds)")
+	parser.add_argument('-a', type=int, required=False, help="-a : le type d'annulation de precommandes")
 	args = parser.parse_args()
 	
 	Sp = S = ExaminerCompte().recuperer_solde_krw()
 	imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
 
 	Commission = 0.9995
+	nom_symbol = ''
+	idx = 0
+	animation = "|/-\\"
+
 	if args.s is not None:
 		if args.s < 10000000:
 			imprimer(Niveau.ERREUR, "Vous devez saisir plus de 10,000,000 won.")
@@ -650,6 +665,11 @@ if __name__=="__main__":
 	else:
 		S = int(S * Commission)
 	
+	if args.a is not None:
+		__facon_achat = args.a
+	else:
+		__facon_achat = 1
+
 	if args.f is not None:
 		__facon_achat = args.f
 	else:
@@ -663,7 +683,7 @@ if __name__=="__main__":
 	if args.d is not None:
 		__proportion_divise = args.d
 	else:
-		__proportion_divise = 0.3
+		__proportion_divise = 0.333
 
 	if args.t is not None:
 		__temps_timeout = args.t
@@ -675,41 +695,43 @@ if __name__=="__main__":
 	else:
 		__position_vente = 0.32
 	
-	nom_symbol = ''
-	idx = 0
-	animation = "|/-\\"
 
-	Annuler().annuler_precommandes()
-
+	Annuler().annuler_precommandes(1)
 	while True:
 		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 4):
 			TEMPS_REINITIAL = datetime.now()
-			list_symbol = []
-			with open("ban.txt", 'r') as f:
-				list_symbol_interdit = [line.strip() for line in f]
+			list_symbols, list_symbols_ = [], []
 
-			for dr in tqdm(RecupererCodeMarche().dict_response, desc = 'Initialisation'):
-				marche = dr.get('market')
-				if marche[:3] == "KRW" and marche[4:] not in list_symbol_interdit:
-					r = RecupererInfoCandle(marche[4:])
-					time.sleep(0.054)
+			with open("reputation.csv", 'r') as f:
+				list_reputations = [line.strip() for line in f]
 
-					if 0.04 < r.prix_courant < 0.102 or 0.4 < r.prix_courant < 1.02 or 4 < r.prix_courant < 10.2 or \
-						40 < r.prix_courant < 102 or 400 < r.prix_courant < 1020 or 3200 < r.prix_courant:
-						acc_trade_price = 0
-						for i in range(80):
-							acc_trade_price += r.array_acc_trade_price[i]
+			for reputation in list_reputations:
+				t = reputation.split(',')
+				symbol, note = t[0], int(t[1])
+				if note >= 50:
+					list_symbols_.append(symbol)		
 
-						if acc_trade_price > 300000000: # 300 million
-							list_symbol.append(marche[4:])
+			for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
+				r = RecupererInfoCandle(symbol)
+				time.sleep(0.054)
+
+				if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
+					2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
+					270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
+					volume_transactions = 0
+					for i in range(80):
+						volume_transactions += r.array_acc_trade_price[i]
+
+					if volume_transactions > 300000000: # 300 million
+						list_symbols.append(symbol)
 
 			imprimer(Niveau.INFORMATION, 
 						"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
-						'[' + ', '.join(list_symbol) + ']')	
+						'[' + ', '.join(list_symbols) + ']')	
 
-			if nom_symbol != '' and nom_symbol in list_symbol:
-				list_symbol.remove(nom_symbol)
-				list_symbol.insert(0, nom_symbol)
+			if nom_symbol != '' and nom_symbol in list_symbols:
+				list_symbols.remove(nom_symbol)
+				list_symbols.insert(0, nom_symbol)
 		else:
 			breakable, flag_commande_vendre = False, False
 			fault = 0
@@ -718,7 +740,7 @@ if __name__=="__main__":
 				if breakable: 
 					break
 			
-				for symbol in list_symbol:
+				for symbol in list_symbols:
 					if breakable: 
 						break
 					
@@ -730,13 +752,13 @@ if __name__=="__main__":
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
 							if v.verifier_rdivr_integre(20):
-								t = 37 - int(v.cnv / 4)	
+								t = 36 - int(v.cnv / 4)	
 							if v.verifier_bb_variable(20):
-								t = 36 + int(v.z * 4)
+								t = 35 + int(v.z * 4)
 							elif v.verifier_vr(20, 40):
-								t = 31 + int(v.vr / 7)
+								t = 30 + int(v.vr / 7)
 							elif v.verifier_decalage_mm(20, 0.6):
-								t = 33
+								t = 32
 							else:
 								verification_passable = False
 								
@@ -754,9 +776,9 @@ if __name__=="__main__":
 						traceback.print_exc()
 					time.sleep(0.0515)
 			
-			if nom_symbol != '' and nom_symbol in list_symbol:
-				list_symbol.remove(nom_symbol)
-				list_symbol.insert(0, nom_symbol)
+			if nom_symbol != '' and nom_symbol in list_symbols:
+				list_symbols.remove(nom_symbol)
+				list_symbols.insert(0, nom_symbol)
 
 			cv = ControlerVente()
 			while True:
