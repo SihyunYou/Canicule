@@ -768,11 +768,11 @@ if __name__=="__main__":
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
 							if v.verifier_rdivr_integre(20):
-								t = 36 - int(v.cnv / 3)	
+								t = 36 - int(v.cnv / 25)
 							if v.verifier_bb_variable(20):
-								t = 35 + int(v.z * 5)
+								t = 36 + int(v.z * 1.8)
 							elif v.verifier_vr(20, 40):
-								t = 30 + int(v.vr / 7)
+								t = 30 + int(v.vr / 6)
 							elif v.verifier_decalage_mm(20, 0.6):
 								t = 32
 							else:
