@@ -124,7 +124,6 @@ class RecupererCodeMarche:
 			raise Exception('Recuperer code de marche')
 
 
-COMTE = 200
 class RecupererInfoCandle:
 	def __recuperer_array(self, _s, _n):
 		arr = np.zeros(_n)
@@ -133,9 +132,10 @@ class RecupererInfoCandle:
 		return arr
 
 	def __init__(self, _symbol):
+		comte = 200
 		querystring = {
 			"market" : "KRW-" + _symbol,
-			"count" : str(COMTE)
+			"count" : str(comte)
 		}
 
 		try:
@@ -146,12 +146,12 @@ class RecupererInfoCandle:
 			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
 			raise Exception("RecupererInfoCandle")
 
-		self.array_opening_price = self.__recuperer_array('opening_price', COMTE)
-		self.array_trade_price = self.__recuperer_array('trade_price', COMTE)
+		self.array_opening_price = self.__recuperer_array('opening_price', comte)
+		self.array_trade_price = self.__recuperer_array('trade_price', comte)
 		self.prix_courant = self.array_trade_price[-1]
-		self.array_high_price = self.__recuperer_array('high_price', COMTE)
-		self.array_low_price = self.__recuperer_array('low_price', COMTE)
-		self.array_acc_trade_price = self.__recuperer_array('candle_acc_trade_price', COMTE)
+		self.array_high_price = self.__recuperer_array('high_price', comte)
+		self.array_low_price = self.__recuperer_array('low_price', comte)
+		self.array_acc_trade_price = self.__recuperer_array('candle_acc_trade_price', comte)
 
 
 class Verifier:
@@ -247,8 +247,8 @@ class Verifier:
 			if rdi <= 144 * self.std20_regularise - 2.72:
 				vr = self.obtenir_vr(_n)
 				if rdi < 0 and vr < 70:
-					self.cnv = abs(rdi + 1) / vr * 100
-					if self.cnv > 10:
+					self.cnv = abs(rdi + 1) / vr * 1000
+					if self.cnv > 100:
 						imprimer(Niveau.INFORMATION, 
 									"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)))
 						return True
@@ -407,24 +407,27 @@ class Acheter:
 
 	class Diviser(Enum):
 		LINEAIRE = 1
-		PARABOLIQUE_II = 2
-		PARABOLIQUE_I = 3
-		LOG_LINEAIRE = 4
-		EXPOSANT = 5
-		LAPIN = 6
+		LOG_LINEAIRE_II = 2
+		LOG_LINEAIRE_I = 3
+		PARABOLIQUE_II = 4
+		PARABOLIQUE_I = 5
+		EXPOSANT = 6
+		LAPIN = 7
 
 	def diviser_integre(self, _pourcent_descente, _fois_decente, _facon):
-		if self.Diviser.LINEAIRE == _facon:
+		if self.Diviser.LINEAIRE == _facon: # 선형 : n
 			self.diviser_lineaire(_pourcent_descente, _fois_decente, 16777216)
-		elif self.Diviser.PARABOLIQUE_II == _facon:
-			self.diviser_parabolique2(_pourcent_descente, _fois_decente)
-		elif self.Diviser.PARABOLIQUE_I == _facon:
-			self.diviser_parabolique(_pourcent_descente, _fois_decente)
-		elif self.Diviser.LOG_LINEAIRE == _facon:
+		elif self.Diviser.LOG_LINEAIRE_II == _facon: # 제2형 선형로그 : n * log(n + 3)
 			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 3)
-		elif self.Diviser.EXPOSANT == _facon:
+		elif self.Diviser.LOG_LINEAIRE_I == _facon: # 제1형 선형로그 : n * log(n + 2)
+			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 2)
+		elif self.Diviser.PARABOLIQUE_II == _facon: # 제2형 포물선 : 2.5n^2 + 2.5n + 5
+			self.diviser_parabolique2(_pourcent_descente, _fois_decente)
+		elif self.Diviser.PARABOLIQUE_I == _facon: # 제1형 포물선 : n^2 - 0.5n + 1
+			self.diviser_parabolique(_pourcent_descente, _fois_decente)
+		elif self.Diviser.EXPOSANT == _facon: # 지수 : 1.2^n
 			self.diviser_exposant(_pourcent_descente, _fois_decente, 1.2)
-		elif self.Diviser.LAPIN == _facon:
+		elif self.Diviser.LAPIN == _facon: # 토끼(변형 피보나치)
 			self.diviser_lapin(_pourcent_descente, _fois_decente)
 
 	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
@@ -438,18 +441,18 @@ class Acheter:
 			qn = a * h * n / 100 + a
 			self.acheter(pn, qn)
 
-	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant):
-		h = _fois_decente
-		r = _exposant
-		a = self.S * (r - 1) / (pow(r, h) - 1)
-
+	def diviser_log_lineaire(self, _pourcent_descente, _fois_decente, _poids):
+		s = 0
+		for n in range(1, _fois_decente + 1):
+			s += n * math.log(n + _poids)
+		
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = a * pow(r, n - 1)
-			self.acheter(pn, qn)
+			qn = self.S * (n * math.log(n + _poids)) / s
+			self.acheter(pn, qn) 
 
-	def diviser_parabolique(self, _pourcent_descente, _fois_decente):
+	def diviser_parabolique(self, _pourcent_descente, _fois_decente): # non-recommande
 		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
@@ -467,18 +470,18 @@ class Acheter:
 			qn = self.S * kn / s
 			self.acheter(pn, qn)
 
-	def diviser_log_lineaire(self, _pourcent_descente, _fois_decente, _poids):
-		s = 0
-		for n in range(1, _fois_decente + 1):
-			s += n * math.log(n + _poids)
-		
+	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant): # non-recommande
+		h = _fois_decente
+		r = _exposant
+		a = self.S * (r - 1) / (pow(r, h) - 1)
+
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = self.S * (n * math.log(n + _poids)) / s
-			self.acheter(pn, qn) 
+			qn = a * pow(r, n - 1)
+			self.acheter(pn, qn)
 
-	def diviser_lapin(self, _pourcent_descente, _fois_decente):
+	def diviser_lapin(self, _pourcent_descente, _fois_decente): # non-recommande
 		lapin = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
 		mon_lapin = lapin[:_fois_decente - 1]
 
@@ -639,13 +642,15 @@ if __name__=="__main__":
 	TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
 
 	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
-	parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
-	parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
-	parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
-	parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
-	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
-	parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout(seconds)")
 	parser.add_argument('-a', type=int, required=False, help="-a : le type d'annulation de precommandes")
+	parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
+	parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
+	parser.add_argument('-i', type=int, required=False, help="-i : l'intervalle de reinitialisation de liste d'achat (heures)")
+	parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
+	parser.add_argument('-r', type=int, required=False, help="-l : le seuil(threshold) des reputations de crypto monnaies")
+	parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
+	parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout (seconds)")
+	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
 	args = parser.parse_args()
 	
 	Sp = S = ExaminerCompte().recuperer_solde_krw()
@@ -656,6 +661,37 @@ if __name__=="__main__":
 	idx = 0
 	animation = "|/-\\"
 
+
+	if args.a is not None:
+		__facon_achat = args.a
+	else:
+		__facon_achat = 1
+
+	if args.d is not None:
+		__proportion_divise = args.d
+	else:
+		__proportion_divise = 0.333
+
+	if args.f is not None:
+		__facon_achat = args.f
+	else:
+		__facon_achat = Acheter.Diviser.LOG_LINEAIRE_II
+
+	if args.i is not None:
+		__intervallle_reinitialisation = args.i
+	else:
+		__intervallle_reinitialisation = 4
+
+	if args.p is not None:
+		__poids_divise = args.p
+	else:
+		__poids_divise = 0.018
+
+	if args.r is not None:
+		__seuil_reputation = args.r
+	else:
+		__seuil_reputation = 50
+	
 	if args.s is not None:
 		if args.s < 10000000:
 			imprimer(Niveau.ERREUR, "Vous devez saisir plus de 10,000,000 won.")
@@ -665,26 +701,6 @@ if __name__=="__main__":
 	else:
 		S = int(S * Commission)
 	
-	if args.a is not None:
-		__facon_achat = args.a
-	else:
-		__facon_achat = 1
-
-	if args.f is not None:
-		__facon_achat = args.f
-	else:
-		__facon_achat = Acheter.Diviser.LOG_LINEAIRE
-
-	if args.p is not None:
-		__poids_divise = args.p
-	else:
-		__poids_divise = 0.018
-
-	if args.d is not None:
-		__proportion_divise = args.d
-	else:
-		__proportion_divise = 0.333
-
 	if args.t is not None:
 		__temps_timeout = args.t
 	else:
@@ -698,7 +714,7 @@ if __name__=="__main__":
 
 	Annuler().annuler_precommandes(1)
 	while True:
-		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = 4):
+		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
 			TEMPS_REINITIAL = datetime.now()
 			list_symbols, list_symbols_ = [], []
 
@@ -708,7 +724,7 @@ if __name__=="__main__":
 			for reputation in list_reputations:
 				t = reputation.split(',')
 				symbol, note = t[0], int(t[1])
-				if note >= 50:
+				if note >= __seuil_reputation:
 					list_symbols_.append(symbol)		
 
 			for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
@@ -719,10 +735,10 @@ if __name__=="__main__":
 					2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
 					270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
 					volume_transactions = 0
-					for i in range(80):
+					for i in range(__intervallle_reinitialisation * 20):
 						volume_transactions += r.array_acc_trade_price[i]
 
-					if volume_transactions > 300000000: # 300 million
+					if volume_transactions > 100000000 * __intervallle_reinitialisation: # 100 millions
 						list_symbols.append(symbol)
 
 			imprimer(Niveau.INFORMATION, 
@@ -752,9 +768,9 @@ if __name__=="__main__":
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
 							if v.verifier_rdivr_integre(20):
-								t = 36 - int(v.cnv / 4)	
+								t = 36 - int(v.cnv / 3)	
 							if v.verifier_bb_variable(20):
-								t = 35 + int(v.z * 4)
+								t = 35 + int(v.z * 5)
 							elif v.verifier_vr(20, 40):
 								t = 30 + int(v.vr / 7)
 							elif v.verifier_decalage_mm(20, 0.6):
