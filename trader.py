@@ -60,8 +60,18 @@ def imprimer(_niveau, _s):
 		f.write(t + _s + '\n')
 
 def logger_masse(_n):
-	with open("log/masse.txt", 'w') as f:
-		f.write(str(int(_n)) + ',' + str(int(Sp))) 
+	try:
+		with open("log/masse.txt", 'w') as f:
+			f.write(str(int(_n)) + ',' + str(int(Sp)))
+	except PermissionError:
+		pass
+
+def logger_etat(_s):
+	try:
+		with open("log/etat.txt", 'w') as f:
+			f.write(_s)
+	except PermissionError:
+		pass
 
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
@@ -745,6 +755,7 @@ if __name__=="__main__":
 
 	while True:
 		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
+			logger_etat('초기화')
 			TEMPS_REINITIAL = datetime.now()
 			list_symbols, list_symbols_ = [], []
 
@@ -784,7 +795,8 @@ if __name__=="__main__":
 			while True:
 				if breakable: 
 					break
-			
+				
+				logger_etat('모니터링 중')
 				for symbol in list_symbols:
 					if breakable: 
 						break
@@ -797,17 +809,18 @@ if __name__=="__main__":
 						if v.verfier_surete() and v.verifier_prix():
 							verification_passable = True
 							if v.verifier_rdivr_integre(20):
-								t = 36 - int((v.cnv - 100) / 20)
+								t = 36 - int((v.cnv - 100) / 18)
 							elif v.verifier_bb_variable(20):
-								t = 36 + int(v.z * 1.5)
+								t = 36 + int(v.z * 1.8)
 							elif v.verifier_vr(20, 40):
-								t = 30 + int(v.vr / 6)
+								t = 30 + int(v.vr / 7)
 							elif v.verifier_decalage_mm(20, 0.6):
 								t = 32
 							else:
 								verification_passable = False
 								
 							if verification_passable:
+								logger_etat('매수주문 요청중 (' + symbol + ')')
 								a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
 								a.diviser_integre(__proportion_divise, t, __facon_achat)
 								
@@ -827,13 +840,16 @@ if __name__=="__main__":
 			cv = ControlerVente()
 			while True:
 				if cv.est_commande_vente_complete(nom_symbol):
+					logger_etat('매도 완료')
 					imprimer(Niveau.SUCCES, "Vente achevee. Annuler le reste de demandes d'achat.")
 					break
 				elif fault >= __temps_timeout:
+					logger_etat('시간 초과 실패')
 					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
 					break
 
 				if cv.vendre_a_plein(nom_symbol, __position_vente):
+					logger_etat('투자중 (' + nom_symbol + ')')
 					fault = 0
 				else:
 					fault += 1

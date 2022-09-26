@@ -1,0 +1,10 @@
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\bin\Release\ChatEtChien.exe.config
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\bin\Release\ChatEtChien.exe
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\bin\Release\ChatEtChien.pdb
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.csproj.AssemblyReference.cache
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.Form1.resources
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.Properties.Resources.resources
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.csproj.GenerateResource.cache
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.csproj.CoreCompileInputs.cache
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.exe
+C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.pdb
