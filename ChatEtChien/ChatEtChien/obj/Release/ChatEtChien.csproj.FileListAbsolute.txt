@@ -8,3 +8,13 @@ C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Rel
 C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.csproj.CoreCompileInputs.cache
 C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.exe
 C:\Users\유시현\OneDrive\문서\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.pdb
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\bin\Release\ChatEtChien.exe.config
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\bin\Release\ChatEtChien.exe
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\bin\Release\ChatEtChien.pdb
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.csproj.AssemblyReference.cache
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.Form1.resources
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.Properties.Resources.resources
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.csproj.GenerateResource.cache
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.csproj.CoreCompileInputs.cache
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.exe
+C:\Users\user\Documents\laissez-faire\ChatEtChien\ChatEtChien\obj\Release\ChatEtChien.pdb

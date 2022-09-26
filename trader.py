@@ -1,5 +1,5 @@
 # © Copyright 2022 La Nouvelle Finance Inc. All rights reserved.
-# Bienvenue ! Moi je suis P.D.G. de La Nouvelle Finance et developpeur de cet enfant.  
+# Bienvenue ! Moi je suis P.D.G. de "INVETISSEMENT DU CHAT ET DU CHIEN" et developpeur de cet enfant.  
 # Ce script est dependant des politiques de API de UPBIT.
 # Attention ! Si vous lisez ce script maintenant, ca veut dire qu'il est experimental, pas operationnel.
 # Pourtant, il y a un cle pour que tu puisses pratiquement l'utiliser. Mais ca peut te demander pas mal de temps pour le chercher.
@@ -39,6 +39,8 @@ URL_SERVEUR = 'https://api.upbit.com'
 Sp = 0
 uuid_achat = []
 uuid_vente = ''
+logging = True
+connexion_active = False
 
 class Niveau:
 	INFORMATION = Fore.GREEN + Style.BRIGHT
@@ -56,20 +58,39 @@ def imprimer(_niveau, _s):
 	niveau_datetime = Fore.MAGENTA + Style.NORMAL
 	t = '[' + datetime.now().strftime('%m/%d %X') + '] '
 	print(niveau_datetime + t + _niveau + _s)
+	
 	with open(NOM_FICHE_LOG, 'a') as f:
 		f.write(t + _s + '\n')
 
 def logger_masse(_n):
+	if connexion_active != True:
+		return
+
 	try:
 		with open("log/masse.txt", 'w') as f:
 			f.write(str(int(_n)) + ',' + str(int(Sp)))
 	except PermissionError:
 		pass
 
-def logger_etat(_s):
+class LOG_ETAT(Enum):
+	ERREUR = 0,
+	ATTENDRE = 1,
+	INITIALISER = 2,
+	MONITORER = 3,
+	ACHETER = 4,
+	INVESTIR = 5,
+	HORS_DU_TEMPS = 6,
+	ACHEVER = 7,
+
+def logger_etat(_n, _s = ''):
+	if connexion_active != True:
+		return
+
 	try:
 		with open("log/etat.txt", 'w') as f:
-			f.write(_s)
+			f.write('#' + str(_n))
+			if _s != '':
+				f.write(',' + _s)
 	except PermissionError:
 		pass
 
@@ -673,190 +694,203 @@ class ControlerVente:
 
 
 if __name__=="__main__":
-	with open("key.txt", 'r') as f:
-		CLE_ACCES = f.readline().strip()
-		CLE_SECRET = f.readline().strip()
-		imprimer(Niveau.INFORMATION, "CLE_ACCES : " + CLE_ACCES)
-		imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
+	try:
+		with open("key.txt", 'r') as f:
+			CLE_ACCES = f.readline().strip()
+			CLE_SECRET = f.readline().strip()
+			imprimer(Niveau.INFORMATION, "CLE_ACCES : " + CLE_ACCES)
+			imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
 
-	TEMPS_INITIAL = datetime.now()
-	TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
-	Commission = 0.9995
-	nom_symbol = ''
-	idx = 0
-	animation = "|/-\\"
+		TEMPS_INITIAL = datetime.now()
+		TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
+		Commission = 0.9995
+		nom_symbol = ''
+		idx = 0
+		animation = "|/-\\"
 
-	Annuler().annuler_precommandes(1)
-	Sp = S = ExaminerCompte().recuperer_solde_krw()
-	imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
-	logger_masse(S)
+		Annuler().annuler_precommandes(1)
+		Sp = S = ExaminerCompte().recuperer_solde_krw()
+		imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
+		logger_masse(S)
 
-	parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
-	parser.add_argument('-a', type=int, required=False, help="-a : le type d'annulation de precommandes")
-	parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
-	parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
-	parser.add_argument('-i', type=int, required=False, help="-i : l'intervalle de reinitialisation de liste d'achat (heures)")
-	parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
-	parser.add_argument('-r', type=int, required=False, help="-l : le seuil(threshold) des reputations de crypto monnaies")
-	parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
-	parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout (seconds)")
-	parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
-	args = parser.parse_args()
+		parser = argparse.ArgumentParser(description="T'es vraiment qu'un sale petit.")
+		parser.add_argument('-a', type=int, required=False, help="-a : le type d'annulation de precommandes")
+		parser.add_argument('-c', type=bool, required=False, help="-c : s'il faut se connecter a WindowsForm (pas pour un cmd)")
+		parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
+		parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
+		parser.add_argument('-i', type=int, required=False, help="-i : l'intervalle de reinitialisation de liste d'achat (heures)")
+		parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
+		parser.add_argument('-r', type=int, required=False, help="-l : le seuil(threshold) des reputations de crypto monnaies")
+		parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
+		parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout (seconds)")
+		parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
+		args = parser.parse_args()
 	
-	if args.a is not None:
-		__facon_achat = args.a
-	else:
-		__facon_achat = 1
-
-	if args.d is not None:
-		__proportion_divise = args.d
-	else:
-		__proportion_divise = 0.333
-
-	if args.f is not None:
-		__facon_achat = args.f
-	else:
-		__facon_achat = Acheter.Diviser.LOG_LINEAIRE_II
-
-	if args.i is not None:
-		__intervallle_reinitialisation = args.i
-	else:
-		__intervallle_reinitialisation = 4
-
-	if args.p is not None:
-		__poids_divise = args.p
-	else:
-		__poids_divise = 0.018
-
-	if args.r is not None:
-		__seuil_reputation = args.r
-	else:
-		__seuil_reputation = 50
-	
-	if args.s is not None:
-		if args.s < 10000000:
-			imprimer(Niveau.ERREUR, "Vous devez saisir plus de 10,000,000 won.")
-			exit()
+		if args.a is not None:
+			__facon_achat = args.a
 		else:
-			S = int(args.s * Commission)
-	else:
-		S = int(S * Commission)
-	
-	if args.t is not None:
-		__temps_timeout = args.t
-	else:
-		__temps_timeout = 30
+			__facon_achat = 1
 
-	if args.v is not None:
-		__position_vente = args.v
-	else:
-		__position_vente = 0.32
-
-
-	while True:
-		if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
-			logger_etat('초기화')
-			TEMPS_REINITIAL = datetime.now()
-			list_symbols, list_symbols_ = [], []
-
-			with open("reputation.csv", 'r') as f:
-				list_reputations = [line.strip() for line in f]
-
-			for reputation in list_reputations:
-				t = reputation.split(',')
-				symbol, note = t[0], int(t[1])
-				if note >= __seuil_reputation:
-					list_symbols_.append(symbol)		
-
-			for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
-				r = RecupererInfoCandle(symbol)
-
-				if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
-					2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
-					270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
-					volume_transactions = 0
-					for i in range(__intervallle_reinitialisation * 20):
-						volume_transactions += r.array_acc_trade_price[i]
-
-					if volume_transactions > 100000000 * __intervallle_reinitialisation: # 100 millions
-						list_symbols.append(symbol)
-
-			imprimer(Niveau.INFORMATION, 
-						"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
-						'[' + ', '.join(list_symbols) + ']')	
-
-			if nom_symbol != '' and nom_symbol in list_symbols:
-				list_symbols.remove(nom_symbol)
-				list_symbols.insert(0, nom_symbol)
+		if args.c is not None:
+			connexion_active = args.c
 		else:
-			breakable, flag_commande_vendre = False, False
-			fault = 0
+			connexion_active = False
 
-			while True:
-				if breakable: 
-					break
-				
-				logger_etat('모니터링 중')
-				for symbol in list_symbols:
+		if args.d is not None:
+			__proportion_divise = args.d
+		else:
+			__proportion_divise = 0.333
+
+		if args.f is not None:
+			__facon_achat = args.f
+		else:
+			__facon_achat = Acheter.Diviser.LOG_LINEAIRE_II
+
+		if args.i is not None:
+			__intervallle_reinitialisation = args.i
+		else:
+			__intervallle_reinitialisation = 4
+
+		if args.p is not None:
+			__poids_divise = args.p
+		else:
+			__poids_divise = 0.018
+
+		if args.r is not None:
+			__seuil_reputation = args.r
+		else:
+			__seuil_reputation = 50
+	
+		if args.s is not None:
+			if args.s < 10000000:
+				imprimer(Niveau.ERREUR, "Vous devez saisir plus de 10,000,000 won.")
+				exit()
+			else:
+				S = int(args.s * Commission)
+		else:
+			S = int(S * Commission)
+	
+		if args.t is not None:
+			__temps_timeout = args.t
+		else:
+			__temps_timeout = 30
+
+		if args.v is not None:
+			__position_vente = args.v
+		else:
+			__position_vente = 0.32
+
+
+		while True:
+			if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
+				logger_etat(LOG_ETAT.INITIALISER)
+				TEMPS_REINITIAL = datetime.now()
+				list_symbols, list_symbols_ = [], []
+
+				with open("reputation.csv", 'r') as f:
+					list_reputations = [line.strip() for line in f]
+
+				for reputation in list_reputations:
+					t = reputation.split(',')
+					symbol, note = t[0], int(t[1])
+					if note >= __seuil_reputation:
+						list_symbols_.append(symbol)		
+
+				for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
+					r = RecupererInfoCandle(symbol)
+
+					if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
+						2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
+						270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
+						volume_transactions = 0
+						for i in range(__intervallle_reinitialisation * 20):
+							volume_transactions += r.array_acc_trade_price[i]
+
+						if volume_transactions > 100000000 * __intervallle_reinitialisation: # 100 millions
+							list_symbols.append(symbol)
+
+				imprimer(Niveau.INFORMATION, 
+							"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
+							'[' + ', '.join(list_symbols) + ']')	
+
+				if nom_symbol != '' and nom_symbol in list_symbols:
+					list_symbols.remove(nom_symbol)
+					list_symbols.insert(0, nom_symbol)
+			else:
+				breakable, flag_commande_vendre = False, False
+				fault = 0
+
+				while True:
 					if breakable: 
 						break
+				
+					logger_etat(LOG_ETAT.MONITORER)
+					for symbol in list_symbols:
+						if breakable: 
+							break
 					
-					idx += 1
-					print("En train de monitorer..." + animation[idx % len(animation)], end="\r")
+						idx += 1
+						print("En train de monitorer..." + animation[idx % len(animation)], end="\r")
 					
-					try:
-						v = Verifier(symbol)
-						if v.verfier_surete() and v.verifier_prix():
-							verification_passable = True
-							if v.verifier_rdivr_integre(20):
-								t = 36 - int((v.cnv - 100) / 18)
-							elif v.verifier_bb_variable(20):
-								t = 36 + int(v.z * 1.8)
-							elif v.verifier_vr(20, 40):
-								t = 30 + int(v.vr / 7)
-							elif v.verifier_decalage_mm(20, 0.6):
-								t = 32
-							else:
-								verification_passable = False
+						try:
+							v = Verifier(symbol)
+							if v.verfier_surete() and v.verifier_prix():
+								verification_passable = True
+								if v.verifier_rdivr_integre(20):
+									t = 36 - int((v.cnv - 100) / 18)
+								elif v.verifier_bb_variable(20):
+									t = 36 + int(v.z * 1.8)
+								elif v.verifier_vr(20, 40):
+									t = 30 + int(v.vr / 7)
+								elif v.verifier_decalage_mm(20, 0.6):
+									t = 33
+								else:
+									verification_passable = False
 								
-							if verification_passable:
-								logger_etat('매수주문 요청중 (' + symbol + ')')
-								a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
-								a.diviser_integre(__proportion_divise, t, __facon_achat)
+								if verification_passable:
+									logger_etat(LOG_ETAT.ACHETER, symbol)
+									a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
+									a.diviser_integre(__proportion_divise, t, __facon_achat)
 								
-								nom_symbol = symbol
-								breakable = True
-								imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
+									nom_symbol = symbol
+									breakable = True
+									imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
 							
-								t = threading.Thread(target = winsound.Beep, args=(440, 500))
-								t.start()
-					except Exception:
-						traceback.print_exc()
+									t = threading.Thread(target = winsound.Beep, args=(440, 500))
+									t.start()
+						except Exception:
+							traceback.print_exc()
 			
-			if nom_symbol != '' and nom_symbol in list_symbols:
-				list_symbols.remove(nom_symbol)
-				list_symbols.insert(0, nom_symbol)
+				if nom_symbol != '' and nom_symbol in list_symbols:
+					list_symbols.remove(nom_symbol)
+					list_symbols.insert(0, nom_symbol)
 
-			cv = ControlerVente()
-			while True:
-				if cv.est_commande_vente_complete(nom_symbol):
-					logger_etat('매도 완료')
-					imprimer(Niveau.SUCCES, "Vente achevee. Annuler le reste de demandes d'achat.")
-					break
-				elif fault >= __temps_timeout:
-					logger_etat('시간 초과 실패')
-					imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
-					break
+				cv = ControlerVente()
+				while True:
+					if cv.est_commande_vente_complete(nom_symbol):
+						logger_etat(LOG_ETAT.ACHEVER)
+						imprimer(Niveau.SUCCES, "Vente achevee. Annuler le reste de demandes d'achat.")
+						break
+					elif fault >= __temps_timeout:
+						logger_etat(LOG_ETAT.HORS_DU_TEMPS)
+						imprimer(Niveau.AVERTISSEMENT, "Hors du temps.")
+						break
 
-				if cv.vendre_a_plein(nom_symbol, __position_vente):
-					logger_etat('투자중 (' + nom_symbol + ')')
-					fault = 0
-				else:
-					fault += 1
+					if cv.vendre_a_plein(nom_symbol, __position_vente):
+						logger_etat(LOG_ETAT.INVESTIR, nom_symbol)
+						fault = 0
+					else:
+						fault += 1
 
-			Annuler().annuler_achats()
-			S = int(ExaminerCompte().recuperer_solde_krw())
-			imprimer(Niveau.INFORMATION,
-						"Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
-			logger_masse(S)
-			S = int(S * Commission)
+				Annuler().annuler_achats()
+				S = int(ExaminerCompte().recuperer_solde_krw())
+				imprimer(Niveau.INFORMATION,
+							"Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
+				logger_masse(S)
+				S = int(S * Commission)
+	except Exception:
+		logger_etat(LOG_ETAT.ERREUR)
+		traceback.print_exc()
+		time.sleep(9999999)
+
+
