@@ -1,6 +1,7 @@
 key.txt
 profit_*.txt
-*.exe
 __pycache__
 zNex~*
 log/
+build/
+dist/

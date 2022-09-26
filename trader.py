@@ -25,7 +25,7 @@ import datetime
 from datetime import datetime, timedelta
 from colorama import init, Fore, Back, Style
 import traceback
-from enum import Enum
+from enum import Enum, IntEnum
 
 init(autoreset = True)
 
@@ -41,6 +41,7 @@ uuid_achat = []
 uuid_vente = ''
 logging = True
 connexion_active = False
+Commission = 0.9995
 
 class Niveau:
 	INFORMATION = Fore.GREEN + Style.BRIGHT
@@ -72,15 +73,15 @@ def logger_masse(_n):
 	except PermissionError:
 		pass
 
-class LOG_ETAT(Enum):
-	ERREUR = 0,
-	ATTENDRE = 1,
-	INITIALISER = 2,
-	MONITORER = 3,
-	ACHETER = 4,
-	INVESTIR = 5,
-	HORS_DU_TEMPS = 6,
-	ACHEVER = 7,
+class LOG_ETAT(IntEnum):
+	ERREUR = 0
+	ATTENDRE = 1
+	INITIALISER = 2
+	MONITORER = 3
+	ACHETER = 4
+	INVESTIR = 5
+	HORS_DU_TEMPS = 6
+	ACHEVER = 7
 
 def logger_etat(_n, _s = ''):
 	if connexion_active != True:
@@ -88,7 +89,7 @@ def logger_etat(_n, _s = ''):
 
 	try:
 		with open("log/etat.txt", 'w') as f:
-			f.write('#' + str(_n))
+			f.write('#' + str(int(_n)))
 			if _s != '':
 				f.write(',' + _s)
 	except PermissionError:
@@ -664,7 +665,7 @@ class ControlerVente:
 			
 			if self.t % 10 == 0:	
 				masse_realisee = ExaminerCompte().recuperer_solde_krw(3)
-				masse_irrealisee = (solde + ferme) * RecupererInfoCandle(_symbol).prix_courant
+				masse_irrealisee = (solde + ferme) * RecupererInfoCandle(_symbol).prix_courant * Commission
 				logger_masse(int(masse_realisee + masse_irrealisee))
 			self.t += 1
 
@@ -703,7 +704,6 @@ if __name__=="__main__":
 
 		TEMPS_INITIAL = datetime.now()
 		TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
-		Commission = 0.9995
 		nom_symbol = ''
 		idx = 0
 		animation = "|/-\\"
@@ -855,9 +855,10 @@ if __name__=="__main__":
 									nom_symbol = symbol
 									breakable = True
 									imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
-							
-									t = threading.Thread(target = winsound.Beep, args=(440, 500))
-									t.start()
+									
+									if connexion_active != True:
+										t = threading.Thread(target = winsound.Beep, args=(440, 500))
+										t.start()
 						except Exception:
 							traceback.print_exc()
 			
@@ -892,5 +893,3 @@ if __name__=="__main__":
 		logger_etat(LOG_ETAT.ERREUR)
 		traceback.print_exc()
 		time.sleep(9999999)
-
-
