@@ -5,3 +5,5 @@ zNex~*
 log/
 build/
 dist/
+*.pdb
+.vs/

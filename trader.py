@@ -1,5 +1,5 @@
 # © Copyright 2022 La Nouvelle Finance Inc. All rights reserved.
-# Bienvenue ! Moi je suis P.D.G. de "INVETISSEMENT DU CHAT ET DU CHIEN" et developpeur de cet enfant.  
+# Bienvenue ! Moi je suis P.D.G. de La Nouvelle Finance et developpeur de cet enfant.  
 # Ce script est dependant des politiques de API de UPBIT.
 # Attention ! Si vous lisez ce script maintenant, ca veut dire qu'il est experimental, pas operationnel.
 # Pourtant, il y a un cle pour que tu puisses pratiquement l'utiliser. Mais ca peut te demander pas mal de temps pour le chercher.
@@ -39,7 +39,6 @@ URL_SERVEUR = 'https://api.upbit.com'
 Sp = 0
 uuid_achat = []
 uuid_vente = ''
-logging = True
 connexion_active = False
 Commission = 0.9995
 
@@ -663,11 +662,12 @@ class ControlerVente:
 			if solde < 0:
 				return False
 			
-			if self.t % 10 == 0:	
-				masse_realisee = ExaminerCompte().recuperer_solde_krw(3)
-				masse_irrealisee = (solde + ferme) * RecupererInfoCandle(_symbol).prix_courant * Commission
-				logger_masse(int(masse_realisee + masse_irrealisee))
-			self.t += 1
+			if connexion_active:
+				if self.t % 10 == 0:	
+					masse_realisee = ExaminerCompte().recuperer_solde_krw(3)
+					masse_irrealisee = (solde + ferme) * RecupererInfoCandle(_symbol).prix_courant * Commission
+					logger_masse(int(masse_realisee + masse_irrealisee))
+				self.t += 1
 
 			montant = (solde + ferme) * prix_moyenne_achat
 			self.count_montant_insuffissant = 0
