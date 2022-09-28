@@ -5,5 +5,9 @@ zNex~*
 log/
 build/
 dist/
+ChatEtChien/.vs/
+ChatEtChien/ChatEtChien/obj/
+ChatEtChien/ChatEtChien/bin/
 *.pdb
-.vs/
+*.suo
+*.cache

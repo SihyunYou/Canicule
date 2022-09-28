@@ -67,20 +67,30 @@ namespace ChatEtChien
                             case 1:
                                 button2.Text = "프로그램을 구성 중이에요.";
                                 button2.ForeColor = SystemColors.ControlText;
+                                pictureBox1.Visible = true;
+                                pictureBox2.SendToBack();
+                                pictureBox2.Visible = false;
                                 break;
                             case 2:
                                 button2.Text = "서버에서 데이터를 받아오고 있어요.";
                                 button2.ForeColor = SystemColors.ControlText;
+                                pictureBox1.Visible = true;
+                                pictureBox2.SendToBack();
+                                pictureBox2.Visible = false;
                                 break;
                             case 3:
                                 button2.Text = "코인들을 모니터링하고 있어요.";
                                 button2.ForeColor = SystemColors.ControlText;
+                                pictureBox1.Visible = true;
                                 pictureBox2.SendToBack();
+                                pictureBox2.Visible = false;
                                 break;
                             case 4:
                                 button2.Text = "\'" + s.Split(',')[1] + "\'를 매수할게요!";
                                 button2.ForeColor = SystemColors.ControlText;
+                                pictureBox2.Visible = true;
                                 pictureBox1.SendToBack();
+                                pictureBox1.Visible = false;
                                 break;
                             case 5:
                                 button2.Text = "\'" + s.Split(',')[1] + "\'에 투자하고 있어요.";
@@ -192,7 +202,7 @@ namespace ChatEtChien
                 case 5:
                 case 6:
                 case 7:
-                    var result = MessageBox.Show("투자가 진행중입니다. 정말 종료하시겠습니까?", "멍?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    var result = MessageBox.Show("투자가 진행중이에요. 정말 종료하시겠어요?", "냥?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (result == DialogResult.No)
                     {
                         e.Cancel = true;
