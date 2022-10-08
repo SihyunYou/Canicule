@@ -65,7 +65,6 @@ def imprimer(_niveau, _s):
 def logger_masse(_n):
 	if connexion_active != True:
 		return
-
 	try:
 		with open("log/masse.txt", 'w') as f:
 			f.write(str(int(_n)) + ',' + str(int(Sp)))
