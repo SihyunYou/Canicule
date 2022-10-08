@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from colorama import init, Fore, Back, Style
 import traceback
 from enum import Enum, IntEnum
+from typing import Final
 
 init(autoreset = True)
 
@@ -67,6 +68,7 @@ def logger_masse(_n):
 		return
 	try:
 		with open("log/masse.txt", 'w') as f:
+			global Sp
 			f.write(str(int(_n)) + ',' + str(int(Sp)))
 	except PermissionError:
 		pass
@@ -183,7 +185,6 @@ class RecupererInfoCandle:
 			response = requests.request("GET", URL_CANDLE, params=querystring)
 			self.dict_response = json.loads(response.text)
 
-			#print("심볼 : " + _symbol)
 			time.sleep(0.052)
 		except:
 			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
@@ -198,18 +199,19 @@ class RecupererInfoCandle:
 
 
 class Verifier:
-	def __init__(self, _symbol):
+	def __init__(self, _symbol, _n = 20):
+		self.n = _n
 		self.candle = RecupererInfoCandle(_symbol)
-		self.std20 = np.std(np.array(self.candle.array_trade_price)[-20 : -1])
-		self.std20_regularise = self.std20 / self.candle.prix_courant
-		self.mm20 = np.mean(np.array(self.candle.array_trade_price)[-20 : -1])
+		self.ecart_type = np.std(np.array(self.candle.array_trade_price)[-1 * _n : -1])
+		self.ecart_type_regularise = self.ecart_type / self.candle.prix_courant
+		self.msm = np.mean(np.array(self.candle.array_trade_price)[-1 * _n : -1])
 
 	##### Premiere verification #####
 	def verfier_surete(self):
 		p = self.candle.array_trade_price[-60]
 		q = self.candle.prix_courant
 		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4 and \
-			self.candle.prix_courant < self.mm20 - self.std20 * 0: # 0.2533(10%), 0.5243(20%)
+			self.candle.prix_courant < self.msm - self.ecart_type * 0: # 0.2533(10%), 0.5243(20%)
 			return True
 		return False
 
@@ -222,23 +224,23 @@ class Verifier:
 
 
 	##### Deuxieme verification #####
-	def verifier_bb_variable(self, _n):
+	def verifier_bb_variable(self):
 		# x = std_regularise(RSD), y = z-note(RID)
 		# y <= 144x - 2.72
 
-		z = (self.candle.prix_courant - self.mm20) / self.std20 
-		if self.std20_regularise >= 0.003 and z <= 0:
-			if z <= 144 * self.std20_regularise - 2.72:
+		z = (self.candle.prix_courant - self.msm) / self.ecart_type 
+		if self.ecart_type_regularise >= 0.003 and z <= 0:
+			if z <= 144 * self.ecart_type_regularise - 2.72:
 				self.z = z
 				imprimer(Niveau.INFORMATION, 
 							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
-							", std_regularise : " + str(round(self.std20_regularise, 5)))
+							", std_regularise : " + str(round(self.ecart_type_regularise, 5)))
 				return True
 		return False
 
-	def obtenir_vr(self, _n):
+	def obtenir_vr(self):
 		h, b, e = 0, 0, 0
-		for i in range(-1 * _n, 0):
+		for i in range(-1 * self.n, 0):
 			p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
 			if p > 0:
 				h += self.candle.array_acc_trade_price[i]
@@ -252,9 +254,9 @@ class Verifier:
 		else:
 			return (h + e * 0.5) / (b + e * 0.5) * 100
 
-	def verifier_vr(self, _n, _p):
-		if self.std20_regularise >= 0.005:
-			self.vr = self.obtenir_vr(_n)
+	def verifier_vr(self, _p):
+		if self.ecart_type_regularise >= 0.005:
+			self.vr = self.obtenir_vr()
 			if self.vr != -1:
 				if self.vr <= _p:
 					imprimer(Niveau.INFORMATION, 
@@ -262,33 +264,11 @@ class Verifier:
 					return True
 		return False
 
-	def verifier_decalage_mm(self, _n, _p):
-		std_pondere = self.std20_regularise * 20
-		decalage = _p * (1 + std_pondere)
-
-		if self.candle.prix_courant < self.mm20 * (1 - decalage):
-			imprimer(Niveau.INFORMATION, 
-						"Hors d'envelope ! decalage : " + str(round(decalage, 3)))
-			return True
-		return False
-
-	def verifier_tendance_positive(self):
-		if self.std20_regularise >= 0.005:
-			mm60 = np.mean(np.array(self.candle.array_trade_price)[-60 : -1])
-			mm120 = np.mean(np.array(self.candle.array_trade_price)[-120 : -1])
-
-			if (self.candle.prix_courant - self.mm20) / self.mm20 < 1.24:
-				if self.mm20 > mm60 > mm120:
-					imprimer(Niveau.INFORMATION,
-								"Tendance positive !")
-					return True
-		return False
-
-	def verifier_rdivr_integre(self, _n):		
-		if self.std20_regularise > 0.003:
-			rdi = (self.candle.prix_courant - self.mm20) / self.std20
-			if rdi <= 144 * self.std20_regularise - 2.72:
-				vr = self.obtenir_vr(_n)
+	def verifier_rdivr_integre(self):		
+		if self.ecart_type_regularise > 0.003:
+			rdi = (self.candle.prix_courant - self.msm) / self.ecart_type
+			if rdi <= 144 * self.ecart_type_regularise - 2.72:
+				vr = self.obtenir_vr()
 				if rdi < 0 and vr < 70:
 					self.cnv = abs(rdi - 1) / vr * 500
 					if self.cnv > 100:
@@ -327,10 +307,10 @@ class Annuler:
 				time.sleep(TEMPS_EXCEPTION)
 
 	# @ _type
-	# 1 : Annuler tous les commandes d'achat
-	# 2 : Annuler tous les commandes de vente
-	# 3 : Annuler tous les commandes d'achat et de vente
-	def annuler_precommandes(self, _type : int):
+	ACHAT: Final = 1
+	VENTE: Final = 2
+	TOUT: Final = 3
+	def annuler_precommandes(self, _type = ACHAT):
 		params = {
 			'state': 'wait'
 		}
@@ -420,11 +400,11 @@ class ExaminerCompte:
 			except:
 				time.sleep(TEMPS_DORMIR)
 
-	# @ _type -> int
-	# 1 : solde(disponible)
-	# 2 : ferme
-	# 3 : solde + ferme
-	def recuperer_solde_krw(self, _type = 1):
+	# @ _type
+	SOLDE: Final = 1
+	FERME: Final = 2
+	TOUT: Final = 3
+	def recuperer_solde_krw(self, _type = SOLDE):
 		for mon_dict in self.dict_response:
 			if mon_dict.get('currency') == "KRW":
 				if 1 == _type:
@@ -663,7 +643,7 @@ class ControlerVente:
 			
 			if connexion_active:
 				if self.t % 10 == 0:	
-					masse_realisee = ExaminerCompte().recuperer_solde_krw(3)
+					masse_realisee = ExaminerCompte().recuperer_solde_krw(ExaminerCompte.TOUT)
 					masse_irrealisee = (solde + ferme) * RecupererInfoCandle(_symbol).prix_courant * Commission
 					logger_masse(int(masse_realisee + masse_irrealisee))
 				self.t += 1
@@ -671,7 +651,8 @@ class ControlerVente:
 			montant = (solde + ferme) * prix_moyenne_achat
 			self.count_montant_insuffissant = 0
 
-			if solde > 1000 / prix_moyenne_achat and montant > 5000: # Yay, ca pourra reperer la derniere erreur !
+			# Yay, ca pourra reperer la derniere erreur !
+			if solde > 1000 / prix_moyenne_achat and montant > 5000: 
 				if uuid_vente != '':
 					Annuler().annuler_vente()
 					time.sleep(TEMPS_DORMIR)
@@ -699,15 +680,15 @@ if __name__=="__main__":
 			CLE_ACCES = f.readline().strip()
 			CLE_SECRET = f.readline().strip()
 			imprimer(Niveau.INFORMATION, "CLE_ACCES : " + CLE_ACCES)
-			imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
 
 		TEMPS_INITIAL = datetime.now()
 		TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
 		nom_symbol = ''
 		idx = 0
 		animation = "|/-\\"
+		deuxieme_initialisation = False
 
-		Annuler().annuler_precommandes(1)
+		Annuler().annuler_precommandes(Annuler.ACHAT)
 		Sp = S = ExaminerCompte().recuperer_solde_krw()
 		imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
 		logger_masse(S)
@@ -719,7 +700,6 @@ if __name__=="__main__":
 		parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
 		parser.add_argument('-i', type=int, required=False, help="-i : l'intervalle de reinitialisation de liste d'achat (heures)")
 		parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
-		parser.add_argument('-r', type=int, required=False, help="-l : le seuil(threshold) des reputations de crypto monnaies")
 		parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
 		parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout (seconds)")
 		parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
@@ -754,11 +734,6 @@ if __name__=="__main__":
 			__poids_divise = args.p
 		else:
 			__poids_divise = 0.018
-
-		if args.r is not None:
-			__seuil_reputation = args.r
-		else:
-			__seuil_reputation = 50
 	
 		if args.s is not None:
 			if args.s < 10000000:
@@ -783,30 +758,32 @@ if __name__=="__main__":
 		while True:
 			if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
 				logger_etat(LOG_ETAT.INITIALISER)
+
 				TEMPS_REINITIAL = datetime.now()
 				list_symbols, list_symbols_ = [], []
+
+				if deuxieme_initialisation:
+					Annuler().annuler_precommandes(Annuler.ACHAT)
+				else:
+					deuxieme_initialisation = True
 
 				with open("reputation.csv", 'r') as f:
 					list_reputations = [line.strip() for line in f]
 
 				for reputation in list_reputations:
 					t = reputation.split(',')
-					symbol, note = t[0], int(t[1])
-					if note >= __seuil_reputation:
+					symbol, note, capitalisation = t[0], int(t[1]), float(t[2])
+
+					if note > 80 or note >= 50 and capitalisation * note >= 20:
+						# Ca veut dire que la capitalisation est au moins plus que 400 milliards.
 						list_symbols_.append(symbol)		
 
 				for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
 					r = RecupererInfoCandle(symbol)
-
 					if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
 						2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
 						270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
-						volume_transactions = 0
-						for i in range(__intervallle_reinitialisation * 20):
-							volume_transactions += r.array_acc_trade_price[i]
-
-						if volume_transactions > 100000000 * __intervallle_reinitialisation: # 100 millions
-							list_symbols.append(symbol)
+						list_symbols.append(symbol)
 
 				imprimer(Niveau.INFORMATION, 
 							"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
@@ -832,17 +809,15 @@ if __name__=="__main__":
 						print("En train de monitorer..." + animation[idx % len(animation)], end="\r")
 					
 						try:
-							v = Verifier(symbol)
+							v = Verifier(symbol, 20)
 							if v.verfier_surete() and v.verifier_prix():
 								verification_passable = True
-								if v.verifier_rdivr_integre(20):
+								if v.verifier_rdivr_integre():
 									t = 36 - int((v.cnv - 100) / 18)
-								elif v.verifier_bb_variable(20):
+								elif v.verifier_bb_variable():
 									t = 36 + int(v.z * 1.8)
-								elif v.verifier_vr(20, 40):
+								elif v.verifier_vr(40):
 									t = 30 + int(v.vr / 7)
-								elif v.verifier_decalage_mm(20, 0.6):
-									t = 33
 								else:
 									verification_passable = False
 								
