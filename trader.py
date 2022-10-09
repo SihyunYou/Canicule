@@ -18,7 +18,8 @@ import hashlib
 from urllib.parse import urlencode, unquote
 import winsound
 import argparse
-import numpy as np
+import numpy
+import pandas
 import threading
 from tqdm import tqdm
 import datetime
@@ -169,7 +170,7 @@ class RecupererCodeMarche:
 
 class RecupererInfoCandle:
 	def __recuperer_array(self, _s : str, _n : int):
-		arr = np.zeros(_n)
+		arr = numpy.zeros(_n)
 		for i in range(_n):
 			arr[_n - i - 1] = self.dict_response[i].get(_s)
 		return arr
@@ -201,24 +202,37 @@ class RecupererInfoCandle:
 class Verifier:
 	def __init__(self, _symbol, _n = 20):
 		self.n = _n
+		prixs = numpy.array(self.candle.array_trade_price)[-1 * self.n : -1]
+		transactions = numpy.array(self.candle.array_acc_trade_price)[-1 * self.n : -1]
 		self.candle = RecupererInfoCandle(_symbol)
-		self.ecart_type = np.std(np.array(self.candle.array_trade_price)[-1 * _n : -1])
+		self.ecart_type = numpy.std(valeurs)
 		self.ecart_type_regularise = self.ecart_type / self.candle.prix_courant
-		self.msm = np.mean(np.array(self.candle.array_trade_price)[-1 * _n : -1])
+		self.mm_simple = sum(prixs) / self.n
+		
+		p = 0
+		for i in range(self.n):
+			p += (i + 1) * prixs[i]
+		self.mm_pondere = p / (self.n * (self.n + 1) / 2)
+
+		p = valeurs[0]
+		k = 2 / (self.n + 1)
+		for i in range(1, self.n):
+			p = k * prixs[i] + (1 - k) * p
+		self.mm_exponentiel = p
 
 	##### Premiere verification #####
 	def verfier_surete(self):
 		p = self.candle.array_trade_price[-60]
 		q = self.candle.prix_courant
 		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4 and \
-			self.candle.prix_courant < self.msm - self.ecart_type * 0: # 0.2533(10%), 0.5243(20%)
+			self.candle.prix_courant < self.mm_simple - self.ecart_type * 0: # 0.2533(10%), 0.5243(20%)
 			return True
 		return False
 
 	def verifier_prix(self):
 		if 0.03 < self.candle.prix_courant < 0.1 or 0.3 < self.candle.prix_courant < 1 or \
 			3 < self.candle.prix_courant < 10 or 30 < self.candle.prix_courant < 100 or \
-			300 < self.candle.prix_courant < 1000 or 1800 < self.candle.prix_courant:
+			300 < self.candle.prix_courant < 1000 or 1600 < self.candle.prix_courant:
 			return True
 		return False
 
@@ -228,7 +242,7 @@ class Verifier:
 		# x = std_regularise(RSD), y = z-note(RID)
 		# y <= 144x - 2.72
 
-		z = (self.candle.prix_courant - self.msm) / self.ecart_type 
+		z = (self.candle.prix_courant - self.mm_simple) / self.ecart_type 
 		if self.ecart_type_regularise >= 0.003 and z <= 0:
 			if z <= 144 * self.ecart_type_regularise - 2.72:
 				self.z = z
@@ -266,7 +280,7 @@ class Verifier:
 
 	def verifier_rdivr_integre(self):		
 		if self.ecart_type_regularise > 0.003:
-			rdi = (self.candle.prix_courant - self.msm) / self.ecart_type
+			rdi = (self.candle.prix_courant - self.mm_simple) / self.ecart_type
 			if rdi <= 144 * self.ecart_type_regularise - 2.72:
 				vr = self.obtenir_vr()
 				if rdi < 0 and vr < 70:
@@ -433,96 +447,53 @@ class ExaminerCompte:
 
 
 class Acheter:
-	def __init__(self, _symbol, _prix_courant, _somme_totale, _poids):
+	def __init__(self, _symbol : str, _prix_courant : float, _somme_totale : int, _poids : float):
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
 		self.S = _somme_totale
 		self.poids = _poids
 
-	class Diviser(Enum):
+	class DIVISION(Enum):
 		LINEAIRE = 1
-		LOG_LINEAIRE_II = 2
-		LOG_LINEAIRE_I = 3
-		PARABOLIQUE_II = 4
-		PARABOLIQUE_I = 5
-		EXPOSANT = 6
-		LAPIN = 7
+		LOG_LINEAIRE = 2
+		PARABOLIQUE = 3 
 
-	def diviser_integre(self, _pourcent_descente : float, _fois_decente : int, _facon : int):
-		if self.Diviser.LINEAIRE == _facon: # n
-			self.diviser_lineaire(_pourcent_descente, _fois_decente, 16777216)
-		elif self.Diviser.LOG_LINEAIRE_II == _facon: # n * log(n + 3)
-			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 3)
-		elif self.Diviser.LOG_LINEAIRE_I == _facon: # n * log(n + 2)
-			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 2)
-		elif self.Diviser.PARABOLIQUE_II == _facon: # 2.5n^2 + 2.5n + 5
-			self.diviser_parabolique2(_pourcent_descente, _fois_decente)
-		elif self.Diviser.PARABOLIQUE_I == _facon: # n^2 - 0.5n + 1
-			self.diviser_parabolique(_pourcent_descente, _fois_decente)
-		elif self.Diviser.EXPOSANT == _facon: # 1.2^n
-			self.diviser_exposant(_pourcent_descente, _fois_decente, 1.2)
-		elif self.Diviser.LAPIN == _facon: # fibonacci varie
-			self.diviser_lapin(_pourcent_descente, _fois_decente)
-
-	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
-		r = _fois_decente
-		h = _difference
-		a = self.S / (r * ((r + 1) * h / 200 + 1))
-
+	def diviser(self, _pourcent_descente : float, _fois_decente : int, _facon_division : int, _facon2_division : int):
+		an = []
 		for n in range(1, _fois_decente + 1):
-			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = a * h * n / 100 + a
-			self.acheter(pn, qn)
-
-	def diviser_log_lineaire(self, _pourcent_descente, _fois_decente, _poids):
-		s = 0
-		for n in range(1, _fois_decente + 1):
-			s += n * math.log(n + _poids)
+			if self.DIVISION.LINEAIRE == _facon_division:
+				if 1 == _facon2_division:
+					p = n
+				elif 2 == _facon2_division:
+					p = 1.5 * n - 0.5
+			elif self.DIVISION.LOG_LINEAIRE == _facon_division:
+				if 1 == _facon2_division:
+					p = n * math.log(n + 3)
+				elif 2 == _facon2_division:
+					p = n * math.log(n + 2)
+				elif 3 == _facon2_division:
+					p = n * math.log(n + 2) * math.atan(n + 1)
+				elif 4 == _facon2_division:
+					p = n * math.log(n + 2) * math.atan(n + 1) ** (1 / math.e)
+				elif 5 == _facon2_division:
+					p = n * math.log(n + 2) * math.erf(n)
+			elif self.DIVISION.PARABOLIQUE == _facon_division:
+				if 1 == _facon2_division:
+					p = 2.5 * n ** 2 + 2.5 * n + 5
+				elif 2 == _facon2_division:
+					p = 0.5 * n ** 2 - 0.5 * n + 1
+			else:
+				raise ValueError("_facon_division")
+			
+			if p <= 0:
+				raise ValueError("_facon2_division")
+			an.append(p)
 		
+		A = sum(an)
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = self.S * (n * math.log(n + _poids)) / s
-			self.acheter(pn, qn) 
-
-	def diviser_parabolique(self, _pourcent_descente, _fois_decente): # non-recommande
-		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
-		for n in range(1, _fois_decente + 1):
-			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			kn = (pow(n, 2) / 2) - (n / 2) + 1
-			qn = self.S * kn / s
-			self.acheter(pn, qn)
-
-	def diviser_parabolique2(self, _pourcent_descente, _fois_decente):
-		s = _fois_decente * (5 * pow(_fois_decente, 2) + 15 * _fois_decente + 40) / 6
-		for n in range(1, _fois_decente + 1):
-			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			kn = 5 / 2 * pow(n, 2) + 5 / 2 * n + 5
-			qn = self.S * kn / s
-			self.acheter(pn, qn)
-
-	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant): # non-recommande
-		h = _fois_decente
-		r = _exposant
-		a = self.S * (r - 1) / (pow(r, h) - 1)
-
-		for n in range(1, _fois_decente + 1):
-			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = a * pow(r, n - 1)
-			self.acheter(pn, qn)
-
-	def diviser_lapin(self, _pourcent_descente, _fois_decente): # non-recommande
-		lapin = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
-		mon_lapin = lapin[:_fois_decente - 1]
-
-		for n in range(1, _fois_decente + 1):
-			poids_hauteur = 1 + self.poids * (n - 1)
-			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = self.S * lapin[n - 1] / sum(mon_lapin)
+			qn = self.S * an[n - 1] / A
 			self.acheter(pn, qn) 
 
 	def acheter(self, _pn, _qn):
@@ -697,7 +668,8 @@ if __name__=="__main__":
 		parser.add_argument('-a', type=int, required=False, help="-a : le type d'annulation de precommandes")
 		parser.add_argument('-c', type=bool, required=False, help="-c : s'il faut se connecter a WindowsForm (pas pour un cmd)")
 		parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
-		parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
+		parser.add_argument('-f', type=int, required=False, help="-f : la premiere facon d'achat divise")
+		parser.add_argument('-g', type=int, required=False, help="-g : la deuxieme facon d'achat divise")
 		parser.add_argument('-i', type=int, required=False, help="-i : l'intervalle de reinitialisation de liste d'achat (heures)")
 		parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
 		parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
@@ -723,7 +695,12 @@ if __name__=="__main__":
 		if args.f is not None:
 			__facon_achat = args.f
 		else:
-			__facon_achat = Acheter.Diviser.LOG_LINEAIRE_II
+			__facon_achat = Acheter.DIVISION.LOG_LINEAIRE
+
+		if args.g is not None:
+			__facon2_achat = args.g
+		else:
+			__facon2_achat = 5
 
 		if args.i is not None:
 			__intervallle_reinitialisation = args.i
@@ -824,7 +801,7 @@ if __name__=="__main__":
 								if verification_passable:
 									logger_etat(LOG_ETAT.ACHETER, symbol)
 									a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
-									a.diviser_integre(__proportion_divise, t, __facon_achat)
+									a.diviser(__proportion_divise, t, __facon_achat, __facon2_achat)
 								
 									nom_symbol = symbol
 									breakable = True
