@@ -18,8 +18,6 @@ import hashlib
 from urllib.parse import urlencode, unquote
 import winsound
 import argparse
-import numpy
-import pandas
 import threading
 from tqdm import tqdm
 import datetime
@@ -31,7 +29,7 @@ from typing import Final
 
 init(autoreset = True)
 
-UNIT = 3
+UNIT = 5
 TEMPS_DORMIR = 0.17
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
@@ -169,14 +167,14 @@ class RecupererCodeMarche:
 
 
 class RecupererInfoCandle:
-	def __recuperer_array(self, _s : str, _n : int):
-		arr = numpy.zeros(_n)
+	def __renverser_array(self, _s : str, _n : int):
+		arr = [0] * _n
 		for i in range(_n):
 			arr[_n - i - 1] = self.dict_response[i].get(_s)
 		return arr
 
 	def __init__(self, _symbol : str):
-		comte = 200
+		comte = 200 # n = 3 -> 10h, n = 5 -> 16h 40m
 		querystring = {
 			"market" : "KRW-" + _symbol,
 			"count" : str(comte)
@@ -186,75 +184,44 @@ class RecupererInfoCandle:
 			response = requests.request("GET", URL_CANDLE, params=querystring)
 			self.dict_response = json.loads(response.text)
 
-			time.sleep(0.052)
+			time.sleep(0.051)
 		except:
 			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
 			raise Exception("RecupererInfoCandle")
 
-		self.array_opening_price = self.__recuperer_array('opening_price', comte)
-		self.array_trade_price = self.__recuperer_array('trade_price', comte)
+		self.array_opening_price = self.__renverser_array('opening_price', comte)
+		self.array_trade_price = self.__renverser_array('trade_price', comte)
 		self.prix_courant = self.array_trade_price[-1]
-		self.array_high_price = self.__recuperer_array('high_price', comte)
-		self.array_low_price = self.__recuperer_array('low_price', comte)
-		self.array_acc_trade_price = self.__recuperer_array('candle_acc_trade_price', comte)
+		self.array_high_price = self.__renverser_array('high_price', comte)
+		self.array_low_price = self.__renverser_array('low_price', comte)
+		self.array_acc_trade_price = self.__renverser_array('candle_acc_trade_price', comte)
 
 
 class Verifier:
 	def __init__(self, _symbol, _n = 20):
-		self.n = _n
-		prixs = numpy.array(self.candle.array_trade_price)[-1 * self.n : -1]
-		transactions = numpy.array(self.candle.array_acc_trade_price)[-1 * self.n : -1]
 		self.candle = RecupererInfoCandle(_symbol)
-		self.ecart_type = numpy.std(valeurs)
+		self.n = _n
+		self.prixs = self.candle.array_trade_price[-1 * self.n:]
+		self.prix_maximum = max(self.candle.array_high_price)
+		self.prix_minimum = min(self.candle.array_low_price)
+		self.transactions = self.candle.array_acc_trade_price[-1 * self.n:]
+
+		self.mm_simple = sum(self.prixs) / self.n
+		self.ecart_type = (sum((prix - self.mm_simple) ** 2 for prix in self.prixs) / self.n) ** 0.5
 		self.ecart_type_regularise = self.ecart_type / self.candle.prix_courant
-		self.mm_simple = sum(prixs) / self.n
-		
-		p = 0
+
+		p, q = 0, 0
 		for i in range(self.n):
-			p += (i + 1) * prixs[i]
+			p += (i + 1) * self.prixs[i]
+			q += self.transactions[i] * self.prixs[i]
 		self.mm_pondere = p / (self.n * (self.n + 1) / 2)
+		self.mm_transaction_pondere = q / sum(self.transactions)
 
-		p = valeurs[0]
-		k = 2 / (self.n + 1)
-		for i in range(1, self.n):
-			p = k * prixs[i] + (1 - k) * p
-		self.mm_exponentiel = p
+		self.reference = (self.mm_pondere + self.mm_transaction_pondere) / 2
+		self.indice_ecart_relative = (self.candle.prix_courant - self.reference) / self.ecart_type
 
-	##### Premiere verification #####
-	def verfier_surete(self):
-		p = self.candle.array_trade_price[-60]
-		q = self.candle.prix_courant
-		if - 0.2 < (q - p) / self.candle.prix_courant < 0.4 and \
-			self.candle.prix_courant < self.mm_simple - self.ecart_type * 0: # 0.2533(10%), 0.5243(20%)
-			return True
-		return False
-
-	def verifier_prix(self):
-		if 0.03 < self.candle.prix_courant < 0.1 or 0.3 < self.candle.prix_courant < 1 or \
-			3 < self.candle.prix_courant < 10 or 30 < self.candle.prix_courant < 100 or \
-			300 < self.candle.prix_courant < 1000 or 1600 < self.candle.prix_courant:
-			return True
-		return False
-
-
-	##### Deuxieme verification #####
-	def verifier_bb_variable(self):
-		# x = std_regularise(RSD), y = z-note(RID)
-		# y <= 144x - 2.72
-
-		z = (self.candle.prix_courant - self.mm_simple) / self.ecart_type 
-		if self.ecart_type_regularise >= 0.003 and z <= 0:
-			if z <= 144 * self.ecart_type_regularise - 2.72:
-				self.z = z
-				imprimer(Niveau.INFORMATION, 
-							"Hors de bb_variable ! z : " + str(round(z, 3)) + 
-							", std_regularise : " + str(round(self.ecart_type_regularise, 5)))
-				return True
-		return False
-
-	def obtenir_vr(self):
 		h, b, e = 0, 0, 0
-		for i in range(-1 * self.n, 0):
+		for i in range(self.n):
 			p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
 			if p > 0:
 				h += self.candle.array_acc_trade_price[i]
@@ -264,33 +231,46 @@ class Verifier:
 				e += self.candle.array_acc_trade_price[i]
 
 		if b <= 0 and e <= 0:
-			return -1
-		else:
-			return (h + e * 0.5) / (b + e * 0.5) * 100
+			self.volume_ratio = -1
+		self.volume_ratio = (h + e * 0.5) / (b + e * 0.5) * 100
 
-	def verifier_vr(self, _p):
-		if self.ecart_type_regularise >= 0.005:
-			self.vr = self.obtenir_vr()
-			if self.vr != -1:
-				if self.vr <= _p:
-					imprimer(Niveau.INFORMATION, 
-								"Hors de vr ! vr : " + str(round(self.vr, 2)))
-					return True
+		#print(_symbol)
+		#print(self.reference)
+
+
+	##### Premiere verification #####
+	def verfier_surete(self):
+		if self.ecart_type_regularise < 0.0032 or \
+			self.indice_ecart_relative > 0 or \
+			self.volume_ratio >= 400 or \
+			self.prix_maximum / self.prix_minimum > 1.4:
+			return False
+		return True
+			
+	def verifier_prix(self):
+		if 0.03 < self.candle.prix_courant < 0.1 or 0.3 < self.candle.prix_courant < 1 or \
+			3 < self.candle.prix_courant < 10 or 30 < self.candle.prix_courant < 100 or \
+			300 < self.candle.prix_courant < 1000 or 1600 < self.candle.prix_courant:
+			return True
 		return False
 
-	def verifier_rdivr_integre(self):		
-		if self.ecart_type_regularise > 0.003:
-			rdi = (self.candle.prix_courant - self.mm_simple) / self.ecart_type
-			if rdi <= 144 * self.ecart_type_regularise - 2.72:
-				vr = self.obtenir_vr()
-				if rdi < 0 and vr < 70:
-					self.cnv = abs(rdi - 1) / vr * 500
-					if self.cnv > 100:
-						imprimer(Niveau.INFORMATION, 
-									"Suffire a rdivr_integre ! cnv : " + str(round(self.cnv, 3)) +
-									", rdi : " + str(round(rdi, 2)) +
-									", vr : " + str(round(vr, 2)))
-						return True
+
+	##### Deuxieme verification #####
+	def verifier_ier(self):
+		# ier < fl(etr) -> (0, 0.0133)
+		#				 -> (-1.4592, 0.0032)
+		if self.indice_ecart_relative <= 144 * self.ecart_type_regularise - 1.92:
+			imprimer(Niveau.INFORMATION, 
+						"Hors d'ier! ier : " + str(round(self.indice_ecart_relative, 3)) +
+						", ecart_type_regularise : " + str(round(self.ecart_type_regularise, 5)))
+			return True
+		return False
+
+	def verifier_vr(self, _seuil = 50):
+		if self.volume_ratio <= _seuil:
+			imprimer(Niveau.INFORMATION, 
+						"Hors de vr ! vr : " + str(round(self.volume_ratio, 3)))
+			return True
 		return False
 
 
@@ -700,12 +680,12 @@ if __name__=="__main__":
 		if args.g is not None:
 			__facon2_achat = args.g
 		else:
-			__facon2_achat = 5
+			__facon2_achat = 2
 
 		if args.i is not None:
 			__intervallle_reinitialisation = args.i
 		else:
-			__intervallle_reinitialisation = 4
+			__intervallle_reinitialisation = 12
 
 		if args.p is not None:
 			__poids_divise = args.p
@@ -724,7 +704,7 @@ if __name__=="__main__":
 		if args.t is not None:
 			__temps_timeout = args.t
 		else:
-			__temps_timeout = 30
+			__temps_timeout = 40
 
 		if args.v is not None:
 			__position_vente = args.v
@@ -732,29 +712,25 @@ if __name__=="__main__":
 			__position_vente = 0.32
 
 
+		list_symbols_ = []
+		with open("reputation.csv", 'r') as f:
+			list_reputations = [line.strip() for line in f]
+
+		for reputation in list_reputations:
+			t = reputation.split(',')
+			symbol, note, capitalisation = t[0], int(t[1]), float(t[2])
+
+			if note > 80 or note >= 50 and capitalisation * note >= 20:
+				# Ca veut dire que la capitalisation est au moins plus que 400 milliards.
+				list_symbols_.append(symbol)		
+
+		
 		while True:
 			if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
 				logger_etat(LOG_ETAT.INITIALISER)
-
 				TEMPS_REINITIAL = datetime.now()
-				list_symbols, list_symbols_ = [], []
 
-				if deuxieme_initialisation:
-					Annuler().annuler_precommandes(Annuler.ACHAT)
-				else:
-					deuxieme_initialisation = True
-
-				with open("reputation.csv", 'r') as f:
-					list_reputations = [line.strip() for line in f]
-
-				for reputation in list_reputations:
-					t = reputation.split(',')
-					symbol, note, capitalisation = t[0], int(t[1]), float(t[2])
-
-					if note > 80 or note >= 50 and capitalisation * note >= 20:
-						# Ca veut dire que la capitalisation est au moins plus que 400 milliards.
-						list_symbols_.append(symbol)		
-
+				list_symbols = []
 				for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
 					r = RecupererInfoCandle(symbol)
 					if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
@@ -769,10 +745,15 @@ if __name__=="__main__":
 				if nom_symbol != '' and nom_symbol in list_symbols:
 					list_symbols.remove(nom_symbol)
 					list_symbols.insert(0, nom_symbol)
-			else:
-				breakable, flag_commande_vendre = False, False
-				fault = 0
 
+				if deuxieme_initialisation:
+					Annuler().annuler_precommandes(Annuler.ACHAT)
+				else:
+					deuxieme_initialisation = True
+			else:
+				breakable = False
+				flag_commande_vendre = False
+				
 				while True:
 					if breakable: 
 						break
@@ -789,12 +770,10 @@ if __name__=="__main__":
 							v = Verifier(symbol, 20)
 							if v.verfier_surete() and v.verifier_prix():
 								verification_passable = True
-								if v.verifier_rdivr_integre():
-									t = 36 - int((v.cnv - 100) / 18)
-								elif v.verifier_bb_variable():
-									t = 36 + int(v.z * 1.8)
-								elif v.verifier_vr(40):
-									t = 30 + int(v.vr / 7)
+								if v.verifier_ier():
+									t = 36 + int(v.indice_ecart_relative * 1.8)
+								elif v.verifier_vr():
+									t = 30 + int(v.volume_ratio / 9)
 								else:
 									verification_passable = False
 								
@@ -817,7 +796,10 @@ if __name__=="__main__":
 					list_symbols.remove(nom_symbol)
 					list_symbols.insert(0, nom_symbol)
 
+
 				cv = ControlerVente()
+				fault = 0
+
 				while True:
 					if cv.est_commande_vente_complete(nom_symbol):
 						logger_etat(LOG_ETAT.ACHEVER)
@@ -836,11 +818,13 @@ if __name__=="__main__":
 
 				Annuler().annuler_achats()
 				S = int(ExaminerCompte().recuperer_solde_krw())
+
 				imprimer(Niveau.INFORMATION,
 							"Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
 				logger_masse(S)
 				S = int(S * Commission)
+
 	except Exception:
 		logger_etat(LOG_ETAT.ERREUR)
 		traceback.print_exc()
-		time.sleep(9999999)
+		time.sleep(99999)
