@@ -18,6 +18,7 @@ import hashlib
 from urllib.parse import urlencode, unquote
 import winsound
 import argparse
+import numpy as np
 import threading
 from tqdm import tqdm
 import datetime
@@ -25,11 +26,13 @@ from datetime import datetime, timedelta
 from colorama import init, Fore, Back, Style
 import traceback
 from enum import Enum, IntEnum
-from typing import Final
+
+import talib
+from talib import MA_Type
 
 init(autoreset = True)
 
-UNIT = 5
+UNIT = 3
 TEMPS_DORMIR = 0.17
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
@@ -67,7 +70,6 @@ def logger_masse(_n):
 		return
 	try:
 		with open("log/masse.txt", 'w') as f:
-			global Sp
 			f.write(str(int(_n)) + ',' + str(int(Sp)))
 	except PermissionError:
 		pass
@@ -198,30 +200,54 @@ class RecupererInfoCandle:
 
 
 class Verifier:
-	def __init__(self, _symbol, _n = 20):
+	def __init__(self, _symbol):
 		self.candle = RecupererInfoCandle(_symbol)
-		self.n = _n
-		self.prixs = self.candle.array_trade_price[-1 * self.n:]
 		self.prix_maximum = max(self.candle.array_high_price)
 		self.prix_minimum = min(self.candle.array_low_price)
-		self.transactions = self.candle.array_acc_trade_price[-1 * self.n:]
+		self.ecart_type20 = talib.STDDEV(self.candle.array_trade_price, timeperiod = 20)
+		self.ecart_type20_regularise = self.ecart_type20 / self.candle.prix_courant
+		self.mm20 = talib.MA(self.candle.array_trade_price, timeperiod = 20)[-1]
 
-		self.mm_simple = sum(self.prixs) / self.n
-		self.ecart_type = (sum((prix - self.mm_simple) ** 2 for prix in self.prixs) / self.n) ** 0.5
-		self.ecart_type_regularise = self.ecart_type / self.candle.prix_courant
+	# @ _p : ligne haute -> bas
+	# @ _q : ligne bas -> haute
+	def sont_croisement_dore(self, _p, _q, _timeperiod = 5, _carrefour = 1): 
+		for i in range(-1 * _timeperiod, -1 * _carrefour):
+			if _p[i] < _q[i]:
+				return False
+		for i in range(-1 * _carrefour, 0):
+			if _p[i] >= _q[i]:
+				return False
+		return True
 
-		p, q = 0, 0
-		for i in range(self.n):
-			p += (i + 1) * self.prixs[i]
-			q += self.transactions[i] * self.prixs[i]
-		self.mm_pondere = p / (self.n * (self.n + 1) / 2)
-		self.mm_transaction_pondere = q / sum(self.transactions)
+	##### Premiere verification #####
+	def verfier_surete(self):
+		if self.ecart_type20_regularise < 0.0032 or \
+			self.prix_maximum / self.prix_minimum > 1.4:
+			return False
+		return True
 
-		self.reference = (self.mm_pondere + self.mm_transaction_pondere) / 2
-		self.indice_ecart_relative = (self.candle.prix_courant - self.reference) / self.ecart_type
+	def verifier_prix(self):
+		if 0.03 < self.candle.prix_courant < 0.1 or 0.3 < self.candle.prix_courant < 1 or \
+			3 < self.candle.prix_courant < 10 or 30 < self.candle.prix_courant < 100 or \
+			300 < self.candle.prix_courant < 1000 or 1800 < self.candle.prix_courant:
+			return True
+		return False
 
+
+	##### Deuxieme verification #####
+	def verifier_bb_variable(self, _n):
+		z = (self.candle.prix_courant - self.mm20) / self.ecart_type20 
+		if z <= -1.28 and z <= 144 * self.ecart_type20_regularise - 2.72:
+			self.z = z
+			imprimer(Niveau.INFORMATION, 
+						"Hors de bb_variable ! z : " + str(round(z, 3)) + 
+						", std_regularise : " + str(round(self.ecart_type20_regularise, 5)))
+			return True
+		return False
+
+	def verifier_vr(self, _n, _p):
 		h, b, e = 0, 0, 0
-		for i in range(self.n):
+		for i in range(-1 * _n, 0):
 			p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
 			if p > 0:
 				h += self.candle.array_acc_trade_price[i]
@@ -231,48 +257,69 @@ class Verifier:
 				e += self.candle.array_acc_trade_price[i]
 
 		if b <= 0 and e <= 0:
-			self.volume_ratio = -1
-		self.volume_ratio = (h + e * 0.5) / (b + e * 0.5) * 100
+			return False
 
-		#print(_symbol)
-		#print(self.reference)
+		self.vr = (h + e * 0.5) / (b + e * 0.5) * 100
+		if self.vr != -1:
+			if self.vr <= _p:
+				imprimer(Niveau.INFORMATION, 
+							"Hors de vr ! vr : " + str(round(self.vr, 2)))
+				return True
+		return False
+	
+	def verifier_stochastic(self):
+		slowk, slowd = talib.STOCH(
+			self.candle.array_high_price, 
+			self.candle.array_low_price, 
+			self.candle.array_trade_price,
+			fastk_period=20, 
+			slowk_period=12,
+			slowk_matype=0,
+			slowd_period=12,
+			slowd_matype=0)
 
-
-	##### Premiere verification #####
-	def verfier_surete(self):
-		if self.ecart_type_regularise < 0.0032 or \
-			self.indice_ecart_relative > 0 or \
-			self.volume_ratio >= 400 or \
-			self.prix_maximum / self.prix_minimum > 1.4:
+		if slowk[-1] <= 25:
+			imprimer(Niveau.INFORMATION, 
+				"Hors de la reference slowk 25 ! k : " + str(round(slowk[-1], 2)))
+		elif slowk[-1] <= 50 and \
+			sont_croisement_dore(slowd, slowk):
+				imprimer(Niveau.INFORMATION, 
+					"Surpasser le slowd ! k : " + str(round(slowk[-1], 2)))
+		else:
 			return False
 		return True
-			
-	def verifier_prix(self):
-		if 0.03 < self.candle.prix_courant < 0.1 or 0.3 < self.candle.prix_courant < 1 or \
-			3 < self.candle.prix_courant < 10 or 30 < self.candle.prix_courant < 100 or \
-			300 < self.candle.prix_courant < 1000 or 1600 < self.candle.prix_courant:
-			return True
-		return False
 
+	def verifier_rsi(self, _n):
+		rsi = talib.RSI(self.candle.array_trade_price, timeperiod = 14)
+		signal_rsi = talib.MA(array_rsi, timeperiod = 9, matype = MA_Type.T3)
 
-	##### Deuxieme verification #####
-	def verifier_ier(self):
-		# ier < fl(etr) -> (0, 0.0133)
-		#				 -> (-1.4592, 0.0032)
-		if self.indice_ecart_relative <= 144 * self.ecart_type_regularise - 1.92:
+		if rsi[-1] <= 30:
 			imprimer(Niveau.INFORMATION, 
-						"Hors d'ier! ier : " + str(round(self.indice_ecart_relative, 3)) +
-						", ecart_type_regularise : " + str(round(self.ecart_type_regularise, 5)))
-			return True
-		return False
-
-	def verifier_vr(self, _seuil = 50):
-		if self.volume_ratio <= _seuil:
+				"Hors de la reference rsi 30 ! rsi : " + str(round(rsi[-1], 2)))
+		elif sont_croisement_dore(np.full(20, 30), rsi):
 			imprimer(Niveau.INFORMATION, 
-						"Hors de vr ! vr : " + str(round(self.volume_ratio, 3)))
-			return True
-		return False
+				"Surpasser la reference rsi 30 ! rsi : " + str(round(rsi[-1], 2)))
+		elif self.rsi <= 50 and \
+			sont_croisement_dore(signal_rsi, rsi):
+			imprimer(Niveau.INFORMATION, 
+				"Surpasser le signal rsi ! rsi : " + str(round(rsi[-1], 2)))
+		else:
+			return False
+		return True
 
+	def verifier_macd(self):
+		macd, macdsignal, macdhist = talib.MACD(self.candle.array_trade_price, 12, 26, 9)  
+		if sont_croisement_dore(np.zeros(20), macd):
+			self.ecart = macd[-1]
+			imprimer(Niveau.INFORMATION, 
+				"Surpasser la reference 0 ! macd : " + str(round(self.ecart, 2)))
+		elif sont_croisement_dore(macdsignal, macd):
+			self.ecart = macd[-1] - macdsignal[-1] 
+			imprimer(Niveau.INFORMATION, 
+				"Surpasser le signal macd ! ecart : : " + str(round(self.ecart, 2)))
+		else:
+			return False
+		return True
 
 class Annuler:
 	def annuler_achats(self):
@@ -301,10 +348,10 @@ class Annuler:
 				time.sleep(TEMPS_EXCEPTION)
 
 	# @ _type
-	ACHAT: Final = 1
-	VENTE: Final = 2
-	TOUT: Final = 3
-	def annuler_precommandes(self, _type = ACHAT):
+	# 1 : Annuler tous les commandes d'achat
+	# 2 : Annuler tous les commandes de vente
+	# 3 : Annuler tous les commandes d'achat et de vente
+	def annuler_precommandes(self, _type : int):
 		params = {
 			'state': 'wait'
 		}
@@ -394,11 +441,11 @@ class ExaminerCompte:
 			except:
 				time.sleep(TEMPS_DORMIR)
 
-	# @ _type
-	SOLDE: Final = 1
-	FERME: Final = 2
-	TOUT: Final = 3
-	def recuperer_solde_krw(self, _type = SOLDE):
+	# @ _type -> int
+	# 1 : solde(disponible)
+	# 2 : ferme
+	# 3 : solde + ferme
+	def recuperer_solde_krw(self, _type = 1):
 		for mon_dict in self.dict_response:
 			if mon_dict.get('currency') == "KRW":
 				if 1 == _type:
@@ -427,53 +474,96 @@ class ExaminerCompte:
 
 
 class Acheter:
-	def __init__(self, _symbol : str, _prix_courant : float, _somme_totale : int, _poids : float):
+	def __init__(self, _symbol, _prix_courant, _somme_totale, _poids):
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
 		self.S = _somme_totale
 		self.poids = _poids
 
-	class DIVISION(Enum):
+	class Diviser(Enum):
 		LINEAIRE = 1
-		LOG_LINEAIRE = 2
-		PARABOLIQUE = 3 
+		LOG_LINEAIRE_II = 2
+		LOG_LINEAIRE_I = 3
+		PARABOLIQUE_II = 4
+		PARABOLIQUE_I = 5
+		EXPOSANT = 6
+		LAPIN = 7
 
-	def diviser(self, _pourcent_descente : float, _fois_decente : int, _facon_division : int, _facon2_division : int):
-		an = []
-		for n in range(1, _fois_decente + 1):
-			if self.DIVISION.LINEAIRE == _facon_division:
-				if 1 == _facon2_division:
-					p = n
-				elif 2 == _facon2_division:
-					p = 1.5 * n - 0.5
-			elif self.DIVISION.LOG_LINEAIRE == _facon_division:
-				if 1 == _facon2_division:
-					p = n * math.log(n + 3)
-				elif 2 == _facon2_division:
-					p = n * math.log(n + 2)
-				elif 3 == _facon2_division:
-					p = n * math.log(n + 2) * math.atan(n + 1)
-				elif 4 == _facon2_division:
-					p = n * math.log(n + 2) * math.atan(n + 1) ** (1 / math.e)
-				elif 5 == _facon2_division:
-					p = n * math.log(n + 2) * math.erf(n)
-			elif self.DIVISION.PARABOLIQUE == _facon_division:
-				if 1 == _facon2_division:
-					p = 2.5 * n ** 2 + 2.5 * n + 5
-				elif 2 == _facon2_division:
-					p = 0.5 * n ** 2 - 0.5 * n + 1
-			else:
-				raise ValueError("_facon_division")
-			
-			if p <= 0:
-				raise ValueError("_facon2_division")
-			an.append(p)
-		
-		A = sum(an)
+	def diviser_integre(self, _pourcent_descente : float, _fois_decente : int, _facon : int):
+		if self.Diviser.LINEAIRE == _facon: # n
+			self.diviser_lineaire(_pourcent_descente, _fois_decente, 16777216)
+		elif self.Diviser.LOG_LINEAIRE_II == _facon: # n * log(n + 3)
+			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 3)
+		elif self.Diviser.LOG_LINEAIRE_I == _facon: # n * log(n + 2)
+			self.diviser_log_lineaire(_pourcent_descente, _fois_decente, 2)
+		elif self.Diviser.PARABOLIQUE_II == _facon: # 2.5n^2 + 2.5n + 5
+			self.diviser_parabolique2(_pourcent_descente, _fois_decente)
+		elif self.Diviser.PARABOLIQUE_I == _facon: # n^2 - 0.5n + 1
+			self.diviser_parabolique(_pourcent_descente, _fois_decente)
+		elif self.Diviser.EXPOSANT == _facon: # 1.2^n
+			self.diviser_exposant(_pourcent_descente, _fois_decente, 1.2)
+		elif self.Diviser.LAPIN == _facon: # fibonacci varie
+			self.diviser_lapin(_pourcent_descente, _fois_decente)
+
+	def diviser_lineaire(self, _pourcent_descente, _fois_decente, _difference):
+		r = _fois_decente
+		h = _difference
+		a = self.S / (r * ((r + 1) * h / 200 + 1))
+
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = self.S * an[n - 1] / A
+			qn = a * h * n / 100 + a
+			self.acheter(pn, qn)
+
+	def diviser_log_lineaire(self, _pourcent_descente, _fois_decente, _poids):
+		s = 0
+		for n in range(1, _fois_decente + 1):
+			s += n * math.log(n + _poids)
+		
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			qn = self.S * (n * math.log(n + _poids)) / s
+			self.acheter(pn, qn) 
+
+	def diviser_parabolique(self, _pourcent_descente, _fois_decente): # non-recommande
+		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			kn = (pow(n, 2) / 2) - (n / 2) + 1
+			qn = self.S * kn / s
+			self.acheter(pn, qn)
+
+	def diviser_parabolique2(self, _pourcent_descente, _fois_decente):
+		s = _fois_decente * (5 * pow(_fois_decente, 2) + 15 * _fois_decente + 40) / 6
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			kn = 5 / 2 * pow(n, 2) + 5 / 2 * n + 5
+			qn = self.S * kn / s
+			self.acheter(pn, qn)
+
+	def diviser_exposant(self, _pourcent_descente, _fois_decente, _exposant): # non-recommande
+		h = _fois_decente
+		r = _exposant
+		a = self.S * (r - 1) / (pow(r, h) - 1)
+
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			qn = a * pow(r, n - 1)
+			self.acheter(pn, qn)
+
+	def diviser_lapin(self, _pourcent_descente, _fois_decente): # non-recommande
+		lapin = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
+		mon_lapin = lapin[:_fois_decente - 1]
+
+		for n in range(1, _fois_decente + 1):
+			poids_hauteur = 1 + self.poids * (n - 1)
+			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
+			qn = self.S * lapin[n - 1] / sum(mon_lapin)
 			self.acheter(pn, qn) 
 
 	def acheter(self, _pn, _qn):
@@ -594,7 +684,7 @@ class ControlerVente:
 			
 			if connexion_active:
 				if self.t % 10 == 0:	
-					masse_realisee = ExaminerCompte().recuperer_solde_krw(ExaminerCompte.TOUT)
+					masse_realisee = ExaminerCompte().recuperer_solde_krw(3)
 					masse_irrealisee = (solde + ferme) * RecupererInfoCandle(_symbol).prix_courant * Commission
 					logger_masse(int(masse_realisee + masse_irrealisee))
 				self.t += 1
@@ -602,8 +692,7 @@ class ControlerVente:
 			montant = (solde + ferme) * prix_moyenne_achat
 			self.count_montant_insuffissant = 0
 
-			# Yay, ca pourra reperer la derniere erreur !
-			if solde > 1000 / prix_moyenne_achat and montant > 5000: 
+			if solde > 1000 / prix_moyenne_achat and montant > 5000: # Yay, ca pourra reperer la derniere erreur !
 				if uuid_vente != '':
 					Annuler().annuler_vente()
 					time.sleep(TEMPS_DORMIR)
@@ -631,15 +720,15 @@ if __name__=="__main__":
 			CLE_ACCES = f.readline().strip()
 			CLE_SECRET = f.readline().strip()
 			imprimer(Niveau.INFORMATION, "CLE_ACCES : " + CLE_ACCES)
+			imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
 
 		TEMPS_INITIAL = datetime.now()
 		TEMPS_REINITIAL = datetime.now() - timedelta(hours = 24)
 		nom_symbol = ''
 		idx = 0
 		animation = "|/-\\"
-		deuxieme_initialisation = False
 
-		Annuler().annuler_precommandes(Annuler.ACHAT)
+		Annuler().annuler_precommandes(1)
 		Sp = S = ExaminerCompte().recuperer_solde_krw()
 		imprimer(Niveau.INFORMATION, "KRW disponible : " + format(int(S), ','))
 		logger_masse(S)
@@ -648,10 +737,10 @@ if __name__=="__main__":
 		parser.add_argument('-a', type=int, required=False, help="-a : le type d'annulation de precommandes")
 		parser.add_argument('-c', type=bool, required=False, help="-c : s'il faut se connecter a WindowsForm (pas pour un cmd)")
 		parser.add_argument('-d', type=float, required=False, help="-d : la proportion divise")
-		parser.add_argument('-f', type=int, required=False, help="-f : la premiere facon d'achat divise")
-		parser.add_argument('-g', type=int, required=False, help="-g : la deuxieme facon d'achat divise")
+		parser.add_argument('-f', type=int, required=False, help="-f : la facon d'achat divise")
 		parser.add_argument('-i', type=int, required=False, help="-i : l'intervalle de reinitialisation de liste d'achat (heures)")
 		parser.add_argument('-p', type=float, required=False, help="-p : le poids de division")
+		parser.add_argument('-r', type=int, required=False, help="-l : le seuil(threshold) des reputations de crypto monnaies")
 		parser.add_argument('-s', type=int, required=False, help="-s : la somme totale")
 		parser.add_argument('-t', type=int, required=False, help="-t : le temps timeout (seconds)")
 		parser.add_argument('-v', type=float, required=False, help="-v : la position de vente")
@@ -675,22 +764,22 @@ if __name__=="__main__":
 		if args.f is not None:
 			__facon_achat = args.f
 		else:
-			__facon_achat = Acheter.DIVISION.LOG_LINEAIRE
-
-		if args.g is not None:
-			__facon2_achat = args.g
-		else:
-			__facon2_achat = 2
+			__facon_achat = Acheter.Diviser.LOG_LINEAIRE_II
 
 		if args.i is not None:
 			__intervallle_reinitialisation = args.i
 		else:
-			__intervallle_reinitialisation = 12
+			__intervallle_reinitialisation = 4
 
 		if args.p is not None:
 			__poids_divise = args.p
 		else:
 			__poids_divise = 0.018
+
+		if args.r is not None:
+			__seuil_reputation = args.r
+		else:
+			__seuil_reputation = 50
 	
 		if args.s is not None:
 			if args.s < 10000000:
@@ -704,7 +793,7 @@ if __name__=="__main__":
 		if args.t is not None:
 			__temps_timeout = args.t
 		else:
-			__temps_timeout = 40
+			__temps_timeout = 30
 
 		if args.v is not None:
 			__position_vente = args.v
@@ -712,31 +801,33 @@ if __name__=="__main__":
 			__position_vente = 0.32
 
 
-		list_symbols_ = []
-		with open("reputation.csv", 'r') as f:
-			list_reputations = [line.strip() for line in f]
-
-		for reputation in list_reputations:
-			t = reputation.split(',')
-			symbol, note, capitalisation = t[0], int(t[1]), float(t[2])
-
-			if note > 80 or note >= 50 and capitalisation * note >= 20:
-				# Ca veut dire que la capitalisation est au moins plus que 400 milliards.
-				list_symbols_.append(symbol)		
-
-		
 		while True:
 			if datetime.now() - TEMPS_REINITIAL > timedelta(hours = __intervallle_reinitialisation):
 				logger_etat(LOG_ETAT.INITIALISER)
 				TEMPS_REINITIAL = datetime.now()
+				list_symbols, list_symbols_ = [], []
 
-				list_symbols = []
+				with open("reputation.csv", 'r') as f:
+					list_reputations = [line.strip() for line in f]
+
+				for reputation in list_reputations:
+					t = reputation.split(',')
+					symbol, note = t[0], int(t[1])
+					if note >= __seuil_reputation:
+						list_symbols_.append(symbol)		
+
 				for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
 					r = RecupererInfoCandle(symbol)
+
 					if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
 						2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
 						270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
-						list_symbols.append(symbol)
+						volume_transactions = 0
+						for i in range(__intervallle_reinitialisation * 20):
+							volume_transactions += r.array_acc_trade_price[i]
+
+						if volume_transactions > 100000000 * __intervallle_reinitialisation: # 100 millions
+							list_symbols.append(symbol)
 
 				imprimer(Niveau.INFORMATION, 
 							"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
@@ -745,15 +836,10 @@ if __name__=="__main__":
 				if nom_symbol != '' and nom_symbol in list_symbols:
 					list_symbols.remove(nom_symbol)
 					list_symbols.insert(0, nom_symbol)
-
-				if deuxieme_initialisation:
-					Annuler().annuler_precommandes(Annuler.ACHAT)
-				else:
-					deuxieme_initialisation = True
 			else:
-				breakable = False
-				flag_commande_vendre = False
-				
+				breakable, flag_commande_vendre = False, False
+				fault = 0
+
 				while True:
 					if breakable: 
 						break
@@ -767,20 +853,26 @@ if __name__=="__main__":
 						print("En train de monitorer..." + animation[idx % len(animation)], end="\r")
 					
 						try:
-							v = Verifier(symbol, 20)
+							v = Verifier(symbol)
 							if v.verfier_surete() and v.verifier_prix():
 								verification_passable = True
-								if v.verifier_ier():
-									t = 36 + int(v.indice_ecart_relative * 1.8)
-								elif v.verifier_vr():
-									t = 30 + int(v.volume_ratio / 9)
+								if v.verifier_bb_variable(20):
+									t = 36 + int(v.z * 1.8)
+								elif v.verifier_vr(20, 40):
+									t = 30 + int(v.vr / 7)
+								elif v.verifier_rsi(14):
+									t = 33
+								elif v.verifier_macd():
+									t = 33
+								elif v.verifier_stochastic():
+									t = 33
 								else:
 									verification_passable = False
 								
 								if verification_passable:
 									logger_etat(LOG_ETAT.ACHETER, symbol)
 									a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
-									a.diviser(__proportion_divise, t, __facon_achat, __facon2_achat)
+									a.diviser_integre(__proportion_divise, t, __facon_achat)
 								
 									nom_symbol = symbol
 									breakable = True
@@ -796,10 +888,7 @@ if __name__=="__main__":
 					list_symbols.remove(nom_symbol)
 					list_symbols.insert(0, nom_symbol)
 
-
 				cv = ControlerVente()
-				fault = 0
-
 				while True:
 					if cv.est_commande_vente_complete(nom_symbol):
 						logger_etat(LOG_ETAT.ACHEVER)
@@ -818,13 +907,11 @@ if __name__=="__main__":
 
 				Annuler().annuler_achats()
 				S = int(ExaminerCompte().recuperer_solde_krw())
-
 				imprimer(Niveau.INFORMATION,
 							"Interet : " + '{0:+,}'.format(int(S - Sp)) + ' (' + str(datetime.now() - TEMPS_INITIAL) + ')')
 				logger_masse(S)
 				S = int(S * Commission)
-
 	except Exception:
 		logger_etat(LOG_ETAT.ERREUR)
 		traceback.print_exc()
-		time.sleep(99999)
+		time.sleep(9999999)
