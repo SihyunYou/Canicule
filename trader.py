@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 from colorama import init, Fore, Back, Style
 import traceback
 from enum import Enum, IntEnum
-
+import functools
 import talib
 from talib import MA_Type
 
@@ -191,37 +191,27 @@ class RecupererInfoCandle:
 			imprimer(Niveau.EXCEPTION, "Rate de recuperer les donnes de prix.")
 			raise Exception("RecupererInfoCandle")
 
-		self.array_opening_price = self.__renverser_array('opening_price', comte)
-		self.array_trade_price = self.__renverser_array('trade_price', comte)
-		self.prix_courant = self.array_trade_price[-1]
-		self.array_high_price = self.__renverser_array('high_price', comte)
-		self.array_low_price = self.__renverser_array('low_price', comte)
-		self.array_acc_trade_price = self.__renverser_array('candle_acc_trade_price', comte)
+		self.list_opening_price = self.__renverser_array('opening_price', comte)
+		self.list_trade_price = self.__renverser_array('trade_price', comte)
+		self.prix_courant = self.list_trade_price[-1]
+		self.list_high_price = self.__renverser_array('high_price', comte)
+		self.list_low_price = self.__renverser_array('low_price', comte)
+		self.list_acc_trade_price = self.__renverser_array('candle_acc_trade_price', comte)
 
 
 class Verifier:
 	def __init__(self, _symbol):
 		self.candle = RecupererInfoCandle(_symbol)
-		self.prix_maximum = max(self.candle.array_high_price)
-		self.prix_minimum = min(self.candle.array_low_price)
-		self.ecart_type20 = talib.STDDEV(self.candle.array_trade_price, timeperiod = 20)
+		self.prix_maximum = max(self.candle.list_high_price)
+		self.prix_minimum = min(self.candle.list_low_price)
+		self.mm20 = talib.MA(np.array(self.candle.list_trade_price), timeperiod = 20)[-1]
+		self.ecart_type20 = talib.STDDEV(np.array(self.candle.list_trade_price), timeperiod = 20)[-1]
 		self.ecart_type20_regularise = self.ecart_type20 / self.candle.prix_courant
-		self.mm20 = talib.MA(self.candle.array_trade_price, timeperiod = 20)[-1]
-
-	# @ _p : ligne haute -> bas
-	# @ _q : ligne bas -> haute
-	def sont_croisement_dore(self, _p, _q, _timeperiod = 5, _carrefour = 1): 
-		for i in range(-1 * _timeperiod, -1 * _carrefour):
-			if _p[i] < _q[i]:
-				return False
-		for i in range(-1 * _carrefour, 0):
-			if _p[i] >= _q[i]:
-				return False
-		return True
+		self.indice_ecart_relative = (self.candle.prix_courant - self.mm20) / self.ecart_type20
 
 	##### Premiere verification #####
 	def verfier_surete(self):
-		if self.ecart_type20_regularise < 0.0032 or \
+		if self.ecart_type20_regularise < 0.0036 or \
 			self.prix_maximum / self.prix_minimum > 1.4:
 			return False
 		return True
@@ -235,26 +225,23 @@ class Verifier:
 
 
 	##### Deuxieme verification #####
-	def verifier_bb_variable(self, _n):
-		z = (self.candle.prix_courant - self.mm20) / self.ecart_type20 
-		if z <= -1.28 and z <= 144 * self.ecart_type20_regularise - 2.72:
-			self.z = z
-			imprimer(Niveau.INFORMATION, 
-						"Hors de bb_variable ! z : " + str(round(z, 3)) + 
-						", std_regularise : " + str(round(self.ecart_type20_regularise, 5)))
+	def verifier_bb_variable(self):
+		if self.indice_ecart_relative <= -1.28 and \
+		   self.indice_ecart_relative <= 144 * self.ecart_type20_regularise - 2.72:
+			imprimer(Niveau.INFORMATION, "Hors de la bb_variable !")
 			return True
 		return False
 
-	def verifier_vr(self, _n, _p):
+	def verifier_vr(self, _p):
 		h, b, e = 0, 0, 0
-		for i in range(-1 * _n, 0):
-			p = self.candle.array_trade_price[i] - self.candle.array_opening_price[i]
+		for i in range(-20, 0):
+			p = self.candle.list_trade_price[i] - self.candle.list_opening_price[i]
 			if p > 0:
-				h += self.candle.array_acc_trade_price[i]
+				h += self.candle.list_acc_trade_price[i]
 			elif p < 0:
-				b += self.candle.array_acc_trade_price[i]
+				b += self.candle.list_acc_trade_price[i]
 			else:
-				e += self.candle.array_acc_trade_price[i]
+				e += self.candle.list_acc_trade_price[i]
 
 		if b <= 0 and e <= 0:
 			return False
@@ -263,63 +250,60 @@ class Verifier:
 		if self.vr != -1:
 			if self.vr <= _p:
 				imprimer(Niveau.INFORMATION, 
-							"Hors de vr ! vr : " + str(round(self.vr, 2)))
+							"verifier_vr ! vr : " + str(round(self.vr, 2)))
 				return True
 		return False
-	
-	def verifier_stochastic(self):
-		slowk, slowd = talib.STOCH(
-			self.candle.array_high_price, 
-			self.candle.array_low_price, 
-			self.candle.array_trade_price,
-			fastk_period=20, 
-			slowk_period=12,
-			slowk_matype=0,
-			slowd_period=12,
-			slowd_matype=0)
 
-		if slowk[-1] <= 25:
-			imprimer(Niveau.INFORMATION, 
-				"Hors de la reference slowk 25 ! k : " + str(round(slowk[-1], 2)))
-		elif slowk[-1] <= 50 and \
-			sont_croisement_dore(slowd, slowk):
-				imprimer(Niveau.INFORMATION, 
-					"Surpasser le slowd ! k : " + str(round(slowk[-1], 2)))
-		else:
-			return False
-		return True
+	def verifier_rsi(self, _p):
+		rsi = talib.RSI(np.array(self.candle.list_trade_price), timeperiod = 14)
+		#signal_rsi = talib.EMA(rsi, timeperiod = 9)
 
-	def verifier_rsi(self, _n):
-		rsi = talib.RSI(self.candle.array_trade_price, timeperiod = 14)
-		signal_rsi = talib.MA(array_rsi, timeperiod = 9, matype = MA_Type.T3)
+		if rsi[-1] <= _p:
+			imprimer(Niveau.INFORMATION, 
+				"Hors de la reference rsi ! rsi : " + str(round(rsi[-1], 2)))
+			return True
+		return False
 
-		if rsi[-1] <= 30:
-			imprimer(Niveau.INFORMATION, 
-				"Hors de la reference rsi 30 ! rsi : " + str(round(rsi[-1], 2)))
-		elif sont_croisement_dore(np.full(20, 30), rsi):
-			imprimer(Niveau.INFORMATION, 
-				"Surpasser la reference rsi 30 ! rsi : " + str(round(rsi[-1], 2)))
-		elif self.rsi <= 50 and \
-			sont_croisement_dore(signal_rsi, rsi):
-			imprimer(Niveau.INFORMATION, 
-				"Surpasser le signal rsi ! rsi : " + str(round(rsi[-1], 2)))
-		else:
-			return False
-		return True
+	def verifier_cci(self, _p):
+		cci = talib.CCI(
+				np.array(self.candle.list_high_price),
+				np.array(self.candle.list_low_price),
+				np.array(self.candle.list_trade_price),
+				timeperiod = 20)
 
-	def verifier_macd(self):
-		macd, macdsignal, macdhist = talib.MACD(self.candle.array_trade_price, 12, 26, 9)  
-		if sont_croisement_dore(np.zeros(20), macd):
-			self.ecart = macd[-1]
+		if cci[-1] <= _p:
 			imprimer(Niveau.INFORMATION, 
-				"Surpasser la reference 0 ! macd : " + str(round(self.ecart, 2)))
-		elif sont_croisement_dore(macdsignal, macd):
-			self.ecart = macd[-1] - macdsignal[-1] 
+				"Hors de la reference cci ! cci : " + str(round(cci[-1], 2)))
+			return True
+		return False
+
+	def verifier_williams_r(self, _p):
+		willr = talib.WILLR(
+					np.array(self.candle.list_high_price),
+					np.array(self.candle.list_low_price),
+					np.array(self.candle.list_trade_price),
+					timeperiod = 14)
+
+		if willr[-1] <= _p:
 			imprimer(Niveau.INFORMATION, 
-				"Surpasser le signal macd ! ecart : : " + str(round(self.ecart, 2)))
-		else:
-			return False
-		return True
+				"Hors de la reference willr ! willr : " + str(round(willr[-1], 2)))
+			return True
+		return False
+
+	def verifier_mfi(self, _p):
+		mfi = talib.MFI(
+				np.array(self.candle.list_high_price),
+				np.array(self.candle.list_low_price),
+				np.array(self.candle.list_trade_price),
+				np.array(self.candle.list_acc_trade_price),
+				timeperiod = 14)
+
+		if mfi[-1] <= _p:
+			imprimer(Niveau.INFORMATION, 
+				"Hors de la reference mfi ! mfi : " + str(round(mfi[-1], 2)))
+			return True
+		return False
+
 
 class Annuler:
 	def annuler_achats(self):
@@ -519,12 +503,12 @@ class Acheter:
 	def diviser_log_lineaire(self, _pourcent_descente, _fois_decente, _poids):
 		s = 0
 		for n in range(1, _fois_decente + 1):
-			s += n * math.log(n + _poids)
+			s += n * math.log(n + _poids) * math.erf(n)
 		
 		for n in range(1, _fois_decente + 1):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
-			qn = self.S * (n * math.log(n + _poids)) / s
+			qn = self.S * (n * math.log(n + _poids) * math.erf(n)) / s
 			self.acheter(pn, qn) 
 
 	def diviser_parabolique(self, _pourcent_descente, _fois_decente): # non-recommande
@@ -764,7 +748,7 @@ if __name__=="__main__":
 		if args.f is not None:
 			__facon_achat = args.f
 		else:
-			__facon_achat = Acheter.Diviser.LOG_LINEAIRE_II
+			__facon_achat = Acheter.Diviser.LOG_LINEAIRE_I
 
 		if args.i is not None:
 			__intervallle_reinitialisation = args.i
@@ -824,7 +808,7 @@ if __name__=="__main__":
 						270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
 						volume_transactions = 0
 						for i in range(__intervallle_reinitialisation * 20):
-							volume_transactions += r.array_acc_trade_price[i]
+							volume_transactions += r.list_acc_trade_price[i]
 
 						if volume_transactions > 100000000 * __intervallle_reinitialisation: # 100 millions
 							list_symbols.append(symbol)
@@ -855,27 +839,20 @@ if __name__=="__main__":
 						try:
 							v = Verifier(symbol)
 							if v.verfier_surete() and v.verifier_prix():
-								verification_passable = True
-								if v.verifier_bb_variable(20):
-									t = 36 + int(v.z * 1.8)
-								elif v.verifier_vr(20, 40):
-									t = 30 + int(v.vr / 7)
-								elif v.verifier_rsi(14):
-									t = 33
-								elif v.verifier_macd():
-									t = 33
-								elif v.verifier_stochastic():
-									t = 33
-								else:
-									verification_passable = False
-								
-								if verification_passable:
+								if v.verifier_bb_variable() or \
+									v.verifier_vr(40) or \
+									v.verifier_rsi(30) or \
+									v.verifier_cci(-200) or \
+									v.verifier_williams_r(-80) or \
+									v.verifier_mfi(20):
 									logger_etat(LOG_ETAT.ACHETER, symbol)
 									a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
+									t = 33 + int(v.indice_ecart_relative * 1.5)
 									a.diviser_integre(__proportion_divise, t, __facon_achat)
 								
 									nom_symbol = symbol
 									breakable = True
+									imprimer(Niveau.INFORMATION, "L'indice d'ecart relative : " + str(round(v.indice_ecart_relative, 2)))
 									imprimer(Niveau.INFORMATION, "Acheve de demander l'achat \'" + symbol + '\'')
 									
 									if connexion_active != True:
