@@ -226,7 +226,7 @@ class Verifier:
 
 	##### Deuxieme verification #####
 	def verifier_bb_variable(self):
-		if self.indice_ecart_relative <= -1.28 and \
+		if self.indice_ecart_relative <= 0 and \
 		   self.indice_ecart_relative <= 144 * self.ecart_type20_regularise - 2.72:
 			imprimer(Niveau.INFORMATION, "Hors de la bb_variable !")
 			return True
@@ -840,7 +840,6 @@ if __name__=="__main__":
 							v = Verifier(symbol)
 							if v.verfier_surete() and v.verifier_prix():
 								if v.verifier_bb_variable() or \
-									v.verifier_vr(40) or \
 									v.verifier_rsi(30) or \
 									v.verifier_cci(-200) or \
 									v.verifier_williams_r(-80) or \
