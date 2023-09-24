@@ -111,6 +111,7 @@ def tailler(_prix, _taux):
 	elif t < 10000:
 		t = round(t, 0)
 		t -= t % 5
+		t += 5
 	elif t < 100000:
 		t = round(t, 0)
 		t -= t % 10
@@ -118,7 +119,7 @@ def tailler(_prix, _taux):
 		t = round(t, 0)
 		t -= t % 50
 	elif t < 1000000:
-		t = round(t, 0)
+		t = math.ceil(t, 0)
 		t -= t % 100
 	elif t < 2000000:
 		t = round(t, 0)
@@ -785,7 +786,7 @@ if __name__=="__main__":
 		if args.f is not None:
 			__facon_achat = args.f
 		else:
-			__facon_achat = Acheter.Diviser.LOG_LINEAIRE_I
+			__facon_achat = Acheter.Diviser.PARABOLIQUE_I
 
 		if args.i is not None:
 			__intervallle_reinitialisation = args.i
@@ -876,8 +877,8 @@ if __name__=="__main__":
 					
 						try:
 							v = Verifier(symbol)
-							if v.verfier_surete() and v.verifier_prix():
-								if v.verifier_bb_variable() or \
+							if symbol == "KNC" and v.indice_ecart_relative < 2:
+								if True or v.verifier_bb_variable() or \
 									v.verifier_rsi(30) or \
 									v.verifier_cci(-120) or \
 									v.verifier_williams_r(-90) or \
@@ -887,7 +888,7 @@ if __name__=="__main__":
 									v.verifier_ultosc(30):
 									logger_etat(LOG_ETAT.ACHETER, symbol)
 									a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
-									t = 32 + int(v.indice_ecart_relative * 1.5)
+									t = 28 + int(v.indice_ecart_relative * 1)
 									a.diviser_integre(__proportion_divise, t, __facon_achat)
 								
 									nom_symbol = symbol
