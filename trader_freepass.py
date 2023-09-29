@@ -108,10 +108,11 @@ def tailler(_prix, _taux):
 		t = round(t, 1)
 	elif t < 1000:
 		t = round(t, 0)
+		#t += 1
 	elif t < 10000:
 		t = round(t, 0)
 		t -= t % 5
-		t += 5
+		#t += 5
 	elif t < 100000:
 		t = round(t, 0)
 		t -= t % 10
@@ -579,7 +580,7 @@ class Acheter:
 			self.acheter(pn, qn)
 
 	def diviser_lapin(self, _pourcent_descente, _fois_decente): # non-recommande
-		lapin = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946] # 20
+		lapin = [1, 1, 2, 2, 3, 3, 5, 5, 8, 8, 13, 13, 21, 21, 34, 34, 55, 55, 89, 89, 144, 144, 233, 233, 377, 377, 810, 810, 1187, 1187] # 30
 		mon_lapin = lapin[:_fois_decente - 1]
 
 		for n in range(1, _fois_decente + 1):
@@ -820,7 +821,7 @@ if __name__=="__main__":
 		if args.v is not None:
 			__position_vente = args.v
 		else:
-			__position_vente = 0.32
+			__position_vente = 0.57
 
 
 		while True:
@@ -838,23 +839,8 @@ if __name__=="__main__":
 					symbol, note = t[0], int(t[1])
 					if note >= __seuil_reputation:
 						list_symbols_.append(symbol)		
-
-				for symbol in tqdm(list_symbols_, desc = 'Initialisation'):
-					r = RecupererInfoCandle(symbol)
-
-					if 0.027 < r.prix_courant < 0.102 or 0.27 < r.prix_courant < 1.02 or \
-						2.7 < r.prix_courant < 10.2 or 27 < r.prix_courant < 102 or \
-						270 < r.prix_courant < 1020 or 1500 < r.prix_courant:
-						volume_transactions = 0
-						for i in range(__intervallle_reinitialisation * 20):
-							volume_transactions += r.list_acc_trade_price[i]
-							
-						if volume_transactions > 100000000 * __intervallle_reinitialisation: # 100 millions
-							list_symbols.append(symbol)
-
-				imprimer(Niveau.INFORMATION, 
-							"Monitorer la liste suivie de crypto monnaies qui suffit a la critere d'achat.\n" + \
-							'[' + ', '.join(list_symbols) + ']')	
+				p = "CBK"
+				list_symbols = [p]
 
 				if nom_symbol != '' and nom_symbol in list_symbols:
 					list_symbols.remove(nom_symbol)
@@ -877,7 +863,7 @@ if __name__=="__main__":
 					
 						try:
 							v = Verifier(symbol)
-							if symbol == "KNC" and v.indice_ecart_relative < 2:
+							if symbol == p and v.indice_ecart_relative < 2:
 								if True or v.verifier_bb_variable() or \
 									v.verifier_rsi(30) or \
 									v.verifier_cci(-120) or \
@@ -888,7 +874,7 @@ if __name__=="__main__":
 									v.verifier_ultosc(30):
 									logger_etat(LOG_ETAT.ACHETER, symbol)
 									a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
-									t = 28 + int(v.indice_ecart_relative * 1)
+									t = 27 + int(v.indice_ecart_relative * 1)
 									a.diviser_integre(__proportion_divise, t, __facon_achat)
 								
 									nom_symbol = symbol
