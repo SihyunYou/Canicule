@@ -723,7 +723,7 @@ class ControlerVente:
 
 				solde, ferme, prix_moyenne_achat = ExaminerCompte().recuperer_symbol_info(_symbol)
 				imprimer(Niveau.INFORMATION, 
-							"prix de moyenne d'achat : " + str(prix_moyenne_achat) + ", position de vente : " + str(tailler(prix_moyenne_achat, -1 * _proportion_profit)))
+							"prix moyen d'achat : " + str(prix_moyenne_achat) + ", position de vente : " + str(tailler(prix_moyenne_achat, -1 * _proportion_profit)))
 				Vendre(_symbol, solde + ferme, tailler(prix_moyenne_achat, -1 * _proportion_profit))
 
 				self.flag_commande_vendre = True
@@ -787,7 +787,7 @@ if __name__=="__main__":
 		if args.f is not None:
 			__facon_achat = args.f
 		else:
-			__facon_achat = Acheter.Diviser.PARABOLIQUE_I
+			__facon_achat = Acheter.Diviser.PARABOLIQUE_II
 
 		if args.i is not None:
 			__intervallle_reinitialisation = args.i
@@ -797,7 +797,7 @@ if __name__=="__main__":
 		if args.p is not None:
 			__poids_divise = args.p
 		else:
-			__poids_divise = 0.024
+			__poids_divise = 0.033
 
 		if args.r is not None:
 			__seuil_reputation = args.r
@@ -821,7 +821,7 @@ if __name__=="__main__":
 		if args.v is not None:
 			__position_vente = args.v
 		else:
-			__position_vente = 0.57
+			__position_vente = 0.36
 
 
 		while True:
@@ -839,7 +839,7 @@ if __name__=="__main__":
 					symbol, note = t[0], int(t[1])
 					if note >= __seuil_reputation:
 						list_symbols_.append(symbol)		
-				p = "CBK"
+				p = "META"
 				list_symbols = [p]
 
 				if nom_symbol != '' and nom_symbol in list_symbols:
@@ -863,7 +863,7 @@ if __name__=="__main__":
 					
 						try:
 							v = Verifier(symbol)
-							if symbol == p and v.indice_ecart_relative < 2:
+							if symbol == p and v.indice_ecart_relative < 4:
 								if True or v.verifier_bb_variable() or \
 									v.verifier_rsi(30) or \
 									v.verifier_cci(-120) or \
@@ -874,7 +874,7 @@ if __name__=="__main__":
 									v.verifier_ultosc(30):
 									logger_etat(LOG_ETAT.ACHETER, symbol)
 									a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
-									t = 27 + int(v.indice_ecart_relative * 1)
+									t = 30 + int(v.indice_ecart_relative * 1)
 									a.diviser_integre(__proportion_divise, t, __facon_achat)
 								
 									nom_symbol = symbol
