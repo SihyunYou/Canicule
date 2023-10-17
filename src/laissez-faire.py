@@ -43,9 +43,9 @@ class Niveau:
 	ERREUR = Fore.LIGHTWHITE_EX + Back.LIGHTRED_EX + Style.BRIGHT
 
 
-if not os.path.exists('log'):
-	os.makedirs('log')
-NOM_FICHE_LOG = 'log\\' + datetime.now().strftime('%m.%d.%X').replace(':', '') + '.txt'
+if not os.path.exists('../log'):
+	os.makedirs('../log')
+NOM_FICHE_LOG = '../log\\' + datetime.now().strftime('%m.%d.%X').replace(':', '') + '.txt'
 
 def imprimer(_niveau, _s):
 	niveau_datetime = Fore.MAGENTA + Style.NORMAL
@@ -57,7 +57,7 @@ def imprimer(_niveau, _s):
 
 def logger_masse(_n):
 	try:
-		with open("log/masse.txt", 'w') as f:
+		with open("../log/masse.txt", 'w') as f:
 			f.write(str(int(_n)) + ',' + str(int(Sp)))
 	except PermissionError:
 		pass
@@ -73,7 +73,7 @@ class LOG_ETAT(IntEnum):
 
 def logger_etat(_n, _s = ''):
 	try:
-		with open("log/etat.txt", 'w') as f:
+		with open("../log/etat.txt", 'w') as f:
 			f.write('#' + str(int(_n)))
 			if _s != '':
 				f.write(',' + _s)
