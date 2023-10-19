@@ -690,9 +690,9 @@ if __name__=="__main__":
 					t = 32
 
 					if v.indice_ecart_relative >= 2:
-						t += int((v.indice_ecart_relative - 2) / 5) + 1
+						t += int((v.indice_ecart_relative - 2) / 0.5) + 1
 					elif v.indice_ecart_relative <= -2:
-						t += int((v.indice_ecart_relative + 2) / 5) - 1
+						t += int((v.indice_ecart_relative + 2) / 0.5) - 1
 
 					rsi = v.trouver_rsi()
 					if rsi >= 70:
