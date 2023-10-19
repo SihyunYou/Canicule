@@ -10,7 +10,7 @@ def index():
         if text:
             if not os.path.exists('../log'):
                 os.makedirs('../log')
-            with open('../log/saved_text.txt', 'w') as file:
+            with open('../log/command.txt', 'w') as file:
                 file.write(text)
             return "Text saved successfully."
     return render_template('index.html')

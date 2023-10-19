@@ -24,7 +24,7 @@ from talib import MA_Type
 init(autoreset = True)
 
 UNIT = 5
-TEMPS_DORMIR = 0.17
+TEMPS_DORMIR = 0.168
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -70,6 +70,7 @@ class LOG_ETAT(IntEnum):
 	INVESTIR = 4
 	HORS_DU_TEMPS = 5
 	ACCOMPLIR = 6
+	FORCED_EXIT = 7
 
 def logger_etat(_n, _s = ''):
 	try:
@@ -606,8 +607,6 @@ if __name__=="__main__":
 			CLE_SECRET = f.readline().strip()
 			imprimer(Niveau.INFORMATION, "CLE_ACCES : " + CLE_ACCES)
 			#imprimer(Niveau.INFORMATION, "CLE_SECRET : " + CLE_SECRET)
-		
-		symbol = "META"
 		TEMPS_INITIAL = datetime.now()
 
 		parser = argparse.ArgumentParser(description="foo")
@@ -633,12 +632,12 @@ if __name__=="__main__":
 		if args.f is not None:
 			__facon_achat = args.f
 		else:
-			__facon_achat = Acheter.Diviser.PARABOLIQUE_II
+			__facon_achat = Acheter.Diviser.PARABOLIQUE_I
 
 		if args.p is not None:
 			__poids_divise = args.p
 		else:
-			__poids_divise = 0.035
+			__poids_divise = 0.036
 
 		Sp = S = ExaminerCompte().recuperer_solde_krw()
 		imprimer(Niveau.INFORMATION, "Available KRW : " + format(int(S), ','))
@@ -674,8 +673,27 @@ if __name__=="__main__":
 					break
 
 				try:
+					try:
+						with open("../log/command.txt", 'r') as f:
+							text = f.readline().strip().upper()
+							list_text = text.split(' ')
+							if list_text[0] == 'CHANGE':
+								symbol = list_text[1]
+							elif list_text[0] == 'EXIT':
+								logger_etat(LOG_ETAT.FORCED_EXIT)
+								traceback.print_exc()
+								time.sleep(999999)
+					except Exception:
+						symbol = "META"
+
 					v = Verifier(symbol)
-					t = 30 + int(v.indice_ecart_relative * 1.25)
+					t = 32
+
+					if v.indice_ecart_relative >= 2:
+						t += int((v.indice_ecart_relative - 2) / 5) + 1
+					elif v.indice_ecart_relative <= -2:
+						t += int((v.indice_ecart_relative + 2) / 5) - 1
+
 					rsi = v.trouver_rsi()
 					if rsi >= 70:
 						t += int((rsi - 70) / 6) + 1
