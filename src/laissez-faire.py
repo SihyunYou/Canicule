@@ -24,7 +24,7 @@ from talib import MA_Type
 init(autoreset = True)
 
 UNIT = 5
-TEMPS_DORMIR = 0.168
+TEMPS_DORMIR = 0.167
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -632,7 +632,7 @@ if __name__=="__main__":
 		if args.f is not None:
 			__facon_achat = args.f
 		else:
-			__facon_achat = Acheter.Diviser.PARABOLIQUE_I
+			__facon_achat = Acheter.Diviser.LOG_LINEAIRE_II
 
 		if args.p is not None:
 			__poids_divise = args.p
@@ -675,19 +675,23 @@ if __name__=="__main__":
 				try:
 					try:
 						with open("../log/command.txt", 'r') as f:
-							text = f.readline().strip().upper()
-							list_text = text.split(' ')
-							if list_text[0] == 'CHANGE':
-								symbol = list_text[1]
-							elif list_text[0] == 'EXIT':
-								logger_etat(LOG_ETAT.FORCED_EXIT)
-								traceback.print_exc()
-								time.sleep(999999)
+							list_line = f.readlines()
+							for line in list_line:
+								text = line.strip().upper()
+								list_text = text.split(' ')
+								if list_text[0] == 'SYMBOL':
+									symbol = list_text[1]
+								if list_text[0] == 'TAUX':
+									__position_vente = float(list_text[1])
+								if list_text[0] == 'EXIT':
+									logger_etat(LOG_ETAT.FORCED_EXIT)
+									traceback.print_exc()
+									time.sleep(999999)
 					except Exception:
-						symbol = "META"
+						symbol = "BTC"
 
 					v = Verifier(symbol)
-					t = 32
+					t = 36
 
 					if v.indice_ecart_relative >= 2:
 						t += int((v.indice_ecart_relative - 2) / 0.5) + 1
