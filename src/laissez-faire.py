@@ -84,18 +84,17 @@ def logger_etat(_n, _s = ''):
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
 	if t < 0.1:
-		t = round(t, 4)
+		t = round(t, 6)
 	elif t < 1:
-		t = round(t, 3)
+		t = round(t, 4)
 	elif t < 10: 
-		t = round(t, 2)
+		t = round(t, 3)
 	elif t < 100:
-		t = round(t, 1)
+		t = round(t, 2)
 	elif t < 1000:
-		t = round(t, 0)
+		t = round(t, 1)
 	elif t < 10000:
 		t = round(t, 0)
-		t -= t % 5
 	elif t < 100000:
 		t = round(t, 0)
 		t -= t % 10
@@ -117,17 +116,17 @@ def tailler(_prix, _taux):
 def coller(_prix):
 	t = _prix
 	if t < 0.1:
-		t += 0.0001
+		t += 0.000001
 	elif t < 1:
-		t += 0.001
+		t += 0.0001
 	elif t < 10: 
-		t += 0.01
+		t += 0.001
 	elif t < 100:
-		t += 0.1
+		t += 0.01
 	elif t < 1000:
-		t += 1
+		t += 0.1
 	elif t < 10000:
-		t += 5
+		t += 1
 	elif t < 100000:
 		t += 10
 	elif t < 500000:
@@ -688,7 +687,7 @@ if __name__=="__main__":
 									traceback.print_exc()
 									time.sleep(999999)
 					except Exception:
-						symbol = "BTC"
+						symbol = "STRK"
 
 					v = Verifier(symbol)
 					t = 36
