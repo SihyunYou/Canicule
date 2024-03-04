@@ -24,7 +24,7 @@ from talib import MA_Type
 init(autoreset = True)
 
 UNIT = 5
-TEMPS_DORMIR = 0.167
+TEMPS_DORMIR = 0.164
 TEMPS_EXCEPTION = 0.25
 URL_CANDLE = "https://api.upbit.com/v1/candles/minutes/" + str(UNIT)
 CLE_ACCES = ''
@@ -83,8 +83,10 @@ def logger_etat(_n, _s = ''):
 
 def tailler(_prix, _taux):
 	t = _prix - (_prix / 100) * _taux
-	if t < 0.1:
+	if t < 0.01:
 		t = round(t, 6)
+	elif t < 0.1:
+		t = round(t, 5)
 	elif t < 1:
 		t = round(t, 4)
 	elif t < 10: 
@@ -115,8 +117,10 @@ def tailler(_prix, _taux):
 
 def coller(_prix):
 	t = _prix
-	if t < 0.1:
+	if t < 0.01:
 		t += 0.000001
+	elif t < 0.1:
+		t += 0.00001
 	elif t < 1:
 		t += 0.0001
 	elif t < 10: 
@@ -365,11 +369,12 @@ class ExaminerCompte:
 
 
 class Acheter:
-	def __init__(self, _symbol, _prix_courant, _somme_totale, _poids):
+	def __init__(self, _symbol, _prix_courant, _somme_totale, _poids, _exclure):
 		self.symbol = _symbol
 		self.prix_courant = _prix_courant
 		self.S = _somme_totale
 		self.poids = _poids
+		self.exclure = _exclure		
 
 	class Diviser(Enum):
 		LINEAIRE = 1
@@ -401,7 +406,7 @@ class Acheter:
 		h = _difference
 		a = self.S / (r * ((r + 1) * h / 200 + 1))
 
-		for n in range(1, _fois_decente + 1):
+		for n in range(1, _fois_decente + 1 - self.exclure):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = a * h * n / 100 + a
@@ -412,7 +417,7 @@ class Acheter:
 		for n in range(1, _fois_decente + 1):
 			s += n * math.log(n + _poids)
 		
-		for n in range(1, _fois_decente + 1):
+		for n in range(1, _fois_decente + 1 - self.exclure):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = self.S * (n * math.log(n + _poids)) / s
@@ -420,7 +425,7 @@ class Acheter:
 
 	def diviser_parabolique(self, _pourcent_descente, _fois_decente):
 		s = _fois_decente * (pow(_fois_decente, 2) + 5) / 6
-		for n in range(1, _fois_decente + 1):
+		for n in range(1, _fois_decente + 1 - self.exclure):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			kn = (pow(n, 2) / 2) - (n / 2) + 1
@@ -429,7 +434,7 @@ class Acheter:
 
 	def diviser_parabolique2(self, _pourcent_descente, _fois_decente):
 		s = _fois_decente * (5 * pow(_fois_decente, 2) + 15 * _fois_decente + 40) / 6
-		for n in range(1, _fois_decente + 1):
+		for n in range(1, _fois_decente + 1 - self.exclure):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			kn = 5 / 2 * pow(n, 2) + 5 / 2 * n + 5
@@ -441,7 +446,7 @@ class Acheter:
 		r = _exposant
 		a = self.S * (r - 1) / (pow(r, h) - 1)
 
-		for n in range(1, _fois_decente + 1):
+		for n in range(1, _fois_decente + 1 - self.exclure):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = a * pow(r, n - 1)
@@ -451,7 +456,7 @@ class Acheter:
 		lapin = [1, 1, 2, 2, 3, 3, 5, 5, 8, 8, 13, 13, 21, 21, 34, 34, 55, 55, 89, 89, 144, 144, 233, 233, 377, 377, 810, 810, 1187, 1187] # 30
 		mon_lapin = lapin[:_fois_decente - 1]
 
-		for n in range(1, _fois_decente + 1):
+		for n in range(1, _fois_decente + 1- self.exclure):
 			poids_hauteur = 1 + self.poids * (n - 1)
 			pn = tailler(coller(self.prix_courant), (n - 1) * (_pourcent_descente * poids_hauteur))
 			qn = self.S * lapin[n - 1] / sum(mon_lapin)
@@ -703,7 +708,7 @@ if __name__=="__main__":
 					elif rsi <= 30:
 						t += int((rsi - 30) / 6) - 1
 
-					a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise)
+					a = Acheter(symbol, v.candle.prix_courant, S, __poids_divise, 4)
 					a.diviser(__proportion_divise, t, __facon_achat)
 
 					logger_etat(LOG_ETAT.ACHETER, symbol)
